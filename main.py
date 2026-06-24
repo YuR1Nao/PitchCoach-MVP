@@ -1399,6 +1399,35 @@ with tab3:
 
                 st.markdown("---")
 
+                # ── 本次亮點 ──────────────────────────────────
+                strength = cached_report.get("strength", "")
+                if strength:
+                    st.markdown("### ✨ 本次表現亮點")
+                    st.markdown(
+                        f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
+                        f'border-radius:0 12px 12px 0;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+                        f'<div style="font-size:0.95rem;line-height:1.7;color:#e9ecef;">👍 {strength}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+                # ── 具體改善建議 ───────────────────────────────
+                improvement_tips = cached_report.get("improvement_tips", [])
+                if improvement_tips:
+                    st.markdown("### 🎯 下次練習重點")
+                    for i, tip in enumerate(improvement_tips, 1):
+                        st.markdown(
+                            f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
+                            f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-bottom:0.6rem;">'
+                            f'<div style="font-size:0.85rem;font-weight:700;color:#ffc107;margin-bottom:0.3rem;">'
+                            f'改善點 {i}</div>'
+                            f'<div style="font-size:0.93rem;line-height:1.7;color:#e9ecef;">{tip}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+
+                st.markdown("---")
+
                 # ── 對話紀錄回放 ──────────────────────────────
                 with st.expander("📝 查看完整實戰文字紀錄（供主管覆核）"):
                     st.caption(f"本次演練共 {len(chat_history_for_report)} 則對話")
