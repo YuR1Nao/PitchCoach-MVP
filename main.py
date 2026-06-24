@@ -43,7 +43,8 @@ if not st.session_state["authenticated"]:
     if role == "🏢 主管（Admin）":
         pwd = st.text_input("管理員密碼", type="password")
         if st.button("登入"):
-            if pwd == ADMIN_PASSWORD and company_input.strip():
+            _admin_pwd = st.secrets.get("ADMIN_PASSWORD", ADMIN_PASSWORD)
+            if pwd == _admin_pwd and company_input.strip():
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "admin"
                 st.session_state["current_company"] = company_input.strip()
@@ -1140,6 +1141,70 @@ with tab3:
                 df = pd.DataFrame(leaderboard)
                 cols = ["名次", "員工姓名", "最高分", "平均分", "訓練次數", "獎金達標次數", "最後訓練日期"]
                 st.dataframe(df[cols], use_container_width=True, hide_index=True)
+
+                st.markdown("---")
+                st.markdown("### 🚨 需要主管關注")
+
+                from datetime import datetime, timedelta
+
+                # 計算行動信號
+                alert_no_practice = []   # 超過 7 天沒練習
+                alert_declining   = []   # 最新分數低於個人平均
+                alert_low_score   = []   # 平均分持續低於 60
+
+                today = datetime.utcnow()
+
+                for name, stats in employee_stats.items():
+                    scores_list   = stats["scores"]
+                    last_date_str = stats["last_training"]
+
+                    # 超過 7 天沒練習
+                    if last_date_str:
+                        try:
+                            last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
+                            if (today - last_date).days >= 7:
+                                alert_no_practice.append(f"{name}（最後練習：{last_date_str}）")
+                        except Exception:
+                            pass
+
+                    # 最新分數低於個人平均（有超過 1 次訓練才比較）
+                    if len(scores_list) >= 2:
+                        personal_avg = sum(scores_list) / len(scores_list)
+                        latest_score = scores_list[0]  # scores_data 已按時間降序排列
+                        if latest_score < personal_avg - 5:
+                            alert_declining.append(
+                                f"{name}（最新 {latest_score} 分 vs 平均 {personal_avg:.0f} 分）"
+                            )
+
+                    # 持續低分
+                    if len(scores_list) >= 2:
+                        avg = sum(scores_list) / len(scores_list)
+                        if avg < 60:
+                            alert_low_score.append(f"{name}（平均 {avg:.0f} 分）")
+
+                # 顯示行動信號
+                has_alert = False
+
+                if alert_no_practice:
+                    has_alert = True
+                    st.error("📵 **超過 7 天未練習**（建議主動聯繫）")
+                    for a in alert_no_practice:
+                        st.markdown(f"　・{a}")
+
+                if alert_declining:
+                    has_alert = True
+                    st.warning("📉 **成績下滑中**（建議了解原因）")
+                    for a in alert_declining:
+                        st.markdown(f"　・{a}")
+
+                if alert_low_score:
+                    has_alert = True
+                    st.warning("⚠️ **持續低於 60 分**（建議安排一對一輔導）")
+                    for a in alert_low_score:
+                        st.markdown(f"　・{a}")
+
+                if not has_alert:
+                    st.success("✅ 目前沒有需要特別關注的成員，整體訓練狀況良好。")
 
                 st.markdown("---")
 

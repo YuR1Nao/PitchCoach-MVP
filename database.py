@@ -58,7 +58,7 @@ def load_settings() -> None:
             "questions_by_category": row.get("questions_by_category"),
         }
         for key, val in mapping.items():
-            if key not in st.session_state and val is not None:
+            if key not in st.session_state and val is not None and val != [] and val != "":
                 st.session_state[key] = val
 
         print("[Supabase] load_settings 成功")
