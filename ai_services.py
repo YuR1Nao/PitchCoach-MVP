@@ -75,7 +75,7 @@ def generate_tts_audio(text: str) -> bytes | None:
         return None
 
 
-def speech_to_text(audio_file) -> str | None:
+def speech_to_text(audio_file, hint_text: str = "") -> str | None:
     """
     使用 OpenAI Whisper API 將 st.audio_input 的音訊轉成繁體中文文字。
 
@@ -95,18 +95,13 @@ def speech_to_text(audio_file) -> str | None:
             st.warning(f"⚠️ 麥克風收到資料量過少（{len(audio_bytes)} bytes），請檢查麥克風裝置")
             return None
 
-        # 從 session_state 取得產品名稱作為提示，幫助 Whisper 辨識專有名詞
-        product_hint  = st.session_state.get("product_name", "")
-        benefits_hint = st.session_state.get("product_benefits", "")[:200]
-        whisper_prompt = f"以下是業務員推銷產品的對話。產品名稱：{product_hint}。{benefits_hint}"
-
         # Whisper 支援 webm/wav/mp4/mp3 等格式；瀏覽器通常錄製成 webm
         # 以 tuple (檔名, BytesIO, MIME類型) 傳遞，讓 SDK 正確判斷格式
         transcript = client.audio.transcriptions.create(
             model    = "whisper-1",
             file     = ("audio.webm", io.BytesIO(audio_bytes), "audio/webm"),
-            language = "zh",            # 指定中文提高準確率；Whisper 仍會自動辨識台語
-            prompt   = whisper_prompt,  # 加入產品名稱提示詞，提升專有名詞辨識準確率
+            language = "zh",
+            prompt   = hint_text if hint_text else "業務推廣，產品說明，客戶疑慮",
         )
 
         recognized_text = transcript.text.strip()

@@ -677,6 +677,19 @@ if tab2 is not None:
             )
         else:
             published_questions = st.session_state.get("published_questions", [])
+            # 若 published_questions 是空的，從完整題庫隨機抽 2 題當備援
+            if not published_questions:
+                all_q = st.session_state.get("questions", [])
+                if all_q:
+                    published_questions = random.sample(all_q, min(2, len(all_q)))
+                else:
+                    # 題庫也是空的，從 questions_by_category 裡抽
+                    qbc = st.session_state.get("questions_by_category", {})
+                    all_from_cat = [q for qs in qbc.values() for q in qs]
+                    if all_from_cat:
+                        published_questions = random.sample(
+                            all_from_cat, min(2, len(all_from_cat))
+                        )
 
         main_analysis       = st.session_state.get("main_analysis", "")
         total_q             = len(published_questions)
@@ -972,8 +985,13 @@ if tab2 is not None:
             key=f"voice_recorder_{voice_key}",
         )
         if audio_value is not None:
+            # 自動從已分析的 PDF 內容提取專有名詞提示
+            _product  = st.session_state.get("product_name", "")
+            _filename = st.session_state.get("analyzed_filename", "")
+            _benefits = st.session_state.get("product_benefits", "")[:50]
+            _hint = "，".join(filter(None, [_product, _filename, _benefits]))
             with st.spinner("🔄 辨識中..."):
-                recognized = speech_to_text(audio_value)
+                recognized = speech_to_text(audio_value, hint_text=_hint)
             if recognized:
                 st.session_state["pending_voice_text"] = recognized
                 st.session_state["voice_key_counter"]  = voice_key + 1
