@@ -700,9 +700,10 @@ if tab2 is not None:
         total_q             = len(published_questions)
 
         # 初始化聊天 session state（只在第一次進入時執行）
-        if "chat_history" not in st.session_state:
+      if "chat_history" not in st.session_state:
             st.session_state["chat_history"]  = []
             st.session_state["current_q_idx"] = 0
+            st.session_state["q_turn_count"]  = 0  # 急速模式每題回合計數器
 
         current_q_idx = st.session_state["current_q_idx"]
         chat_history  = st.session_state["chat_history"]
@@ -787,6 +788,7 @@ if tab2 is not None:
             if st.button("🔄 重新練習", use_container_width=True):
                 st.session_state["chat_history"]  = []
                 st.session_state["current_q_idx"] = 0
+                st.session_state["q_turn_count"]  = 0
                 st.session_state["coach_hint"]    = None
                 st.session_state.pop("employee_name", None)
                 st.session_state.pop("training_mode", None)
@@ -1000,6 +1002,9 @@ if tab2 is not None:
             # 員工送出話術後先清除舊提示，讓教練在新一輪重新分析
             st.session_state["coach_hint"] = None
 
+            # 急速模式計數器：記錄本題已收到幾次使用者回應
+            st.session_state["q_turn_count"] = st.session_state.get("q_turn_count", 0) + 1
+
             # 步驟 1：將員工輸入加入對話記錄
             st.session_state["chat_history"].append(
                 {"role": "user", "content": effective_input}
@@ -1017,6 +1022,13 @@ if tab2 is not None:
                         customer_scenario   = st.session_state.get("customer_scenario", ""),
                         training_mode       = st.session_state.get("training_mode", "speed")
                     )
+                    # ── 急速模式補償：若 AI 未發 [NEXT_Q] 且用戶已回答 ≥ 2 次，Python 強制推進 ──
+                    if (training_mode == "speed"
+                            and new_idx == st.session_state["current_q_idx"]
+                            and "[TEST_COMPLETE]" not in ai_reply
+                            and st.session_state.get("q_turn_count", 0) >= 2):
+                        ai_reply = ai_reply.rstrip() + "[NEXT_Q]"
+                        new_idx  = min(st.session_state["current_q_idx"] + 1, total_q)
                 except Exception as e:
                     ai_reply = f"（系統錯誤：{str(e)}，請重新整理後再試）"
                     new_idx  = st.session_state["current_q_idx"]
@@ -1025,6 +1037,9 @@ if tab2 is not None:
             st.session_state["chat_history"].append(
                 {"role": "assistant", "content": ai_reply}
             )
+            # 題目推進時重置回合計數器
+            if new_idx != st.session_state["current_q_idx"]:
+                st.session_state["q_turn_count"] = 0
             st.session_state["current_q_idx"] = new_idx
 
             # 步驟 4：不預先生成 TTS，讓畫面立即渲染文字

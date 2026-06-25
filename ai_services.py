@@ -197,7 +197,7 @@ def get_coach_hint(
 
     response = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=150,
+        max_tokens=300,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}]
     )
