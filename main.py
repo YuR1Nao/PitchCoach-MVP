@@ -700,7 +700,7 @@ if tab2 is not None:
         total_q             = len(published_questions)
 
         # 初始化聊天 session state（只在第一次進入時執行）
-      if "chat_history" not in st.session_state:
+        if "chat_history" not in st.session_state:
             st.session_state["chat_history"]  = []
             st.session_state["current_q_idx"] = 0
             st.session_state["q_turn_count"]  = 0  # 急速模式每題回合計數器
