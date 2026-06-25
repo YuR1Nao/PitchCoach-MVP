@@ -1022,13 +1022,20 @@ if tab2 is not None:
                         customer_scenario   = st.session_state.get("customer_scenario", ""),
                         training_mode       = st.session_state.get("training_mode", "speed")
                     )
-                    # ── 急速模式補償：若 AI 未發 [NEXT_Q] 且用戶已回答 ≥ 2 次，Python 強制推進 ──
-                    if (training_mode == "speed"
-                            and new_idx == st.session_state["current_q_idx"]
-                            and "[TEST_COMPLETE]" not in ai_reply
-                            and st.session_state.get("q_turn_count", 0) >= 2):
-                        ai_reply = ai_reply.rstrip() + "[NEXT_Q]"
-                        new_idx  = min(st.session_state["current_q_idx"] + 1, total_q)
+                    # ── 急速模式補償：防止考題階段與結局階段無限循環 ──
+                    if training_mode == "speed" and "[TEST_COMPLETE]" not in ai_reply:
+                        _q_count = st.session_state.get("q_turn_count", 0)
+                        _q_now   = st.session_state["current_q_idx"]
+                        if (_q_now < total_q
+                                and new_idx == _q_now
+                                and _q_count >= 2):
+                            # 考題階段：用戶已回答 2 次，強制推進到下一題
+                            ai_reply = ai_reply.rstrip() + "[NEXT_Q]"
+                            new_idx  = min(_q_now + 1, total_q)
+                        elif (_q_now >= total_q
+                                and _q_count >= 2):
+                            # 結局階段：急速模式最多 2 輪成交談判，強制結束
+                            ai_reply = ai_reply.rstrip() + "[TEST_COMPLETE]"
                 except Exception as e:
                     ai_reply = f"（系統錯誤：{str(e)}，請重新整理後再試）"
                     new_idx  = st.session_state["current_q_idx"]
