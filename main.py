@@ -52,16 +52,21 @@ if not st.session_state["authenticated"]:
             else:
                 st.error("密碼錯誤或公司名稱為空")
     else:
-        name_input = st.text_input("您的姓名")
+        name_input   = st.text_input("您的姓名")
+        invite_input = st.text_input("員工邀請碼", type="password")
         if st.button("進入訓練"):
-            if company_input.strip() and name_input.strip():
+            _invite_code = st.secrets.get("EMPLOYEE_CODE",
+                           os.environ.get("EMPLOYEE_CODE", "employee123"))
+            if not company_input.strip() or not name_input.strip():
+                st.error("請填寫公司名稱與姓名")
+            elif invite_input != _invite_code:
+                st.error("❌ 邀請碼錯誤，請向主管確認")
+            else:
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "employee"
                 st.session_state["current_company"] = company_input.strip()
                 st.session_state["employee_name"] = name_input.strip()
                 st.rerun()
-            else:
-                st.error("請填寫公司名稱與姓名")
     st.stop()
 
 # 每個瀏覽器 Session 只執行一次：自動讀取上次儲存的主管設定
@@ -702,34 +707,10 @@ if tab2 is not None:
         current_q_idx = st.session_state["current_q_idx"]
         chat_history  = st.session_state["chat_history"]
 
-        # ── 員工姓名輸入（只在尚未開始對話時顯示）────
-        if not chat_history:
-            st.markdown("### 👤 請輸入你的姓名")
-            st.caption("姓名將用於訓練記錄，讓主管追蹤你的學習進度。")
-
-            col_name, col_start = st.columns([3, 1])
-            with col_name:
-                employee_name_input = st.text_input(
-                    label="員工姓名",
-                    placeholder="例如：王小明",
-                    key="employee_name_input",
-                    label_visibility="collapsed"
-                )
-            with col_start:
-                name_confirm = st.button(
-                    "✅ 確認開始",
-                    type="primary",
-                    use_container_width=True,
-                    disabled=not employee_name_input.strip()
-                )
-
-            if name_confirm and employee_name_input.strip():
-                st.session_state["employee_name"] = employee_name_input.strip()
-                st.rerun()
-
-            # 尚未確認姓名則停止渲染後面的內容
-            if not st.session_state.get("employee_name"):
-                st.stop()
+        # 自動從登入時的 session_state 帶入姓名，不需要再輸入
+        if not st.session_state.get("employee_name"):
+            st.warning("請先登入後再進入訓練。")
+            st.stop()
 
         # 顯示已確認的姓名（對話進行中全程可見）
         if st.session_state.get("employee_name"):
