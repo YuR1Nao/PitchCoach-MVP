@@ -1421,7 +1421,10 @@ with tab3:
     else:
         is_completed = st.session_state.get("is_completed", False)
         chat_history_for_report = st.session_state.get("chat_history", [])
-        published_questions_for_report = st.session_state.get("published_questions", [])
+        published_questions_for_report = (
+            st.session_state.get("published_questions")
+            or st.session_state.get("current_random_questions", [])
+        )
 
         if not is_completed or not chat_history_for_report:
             st.markdown("""
