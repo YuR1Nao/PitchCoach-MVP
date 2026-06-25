@@ -948,7 +948,9 @@ if tab2 is not None:
                                             "left_brain":     auto_report.get("left_brain", ""),
                                             "right_brain":    auto_report.get("right_brain", ""),
                                             "action_item":    auto_report.get("action_item", ""),
-                                            "closing_result": auto_report.get("closing_result", ""),
+                                            "closing_result":   auto_report.get("closing_result", ""),
+                                            "strength":         auto_report.get("strength", ""),
+                                            "improvement_tips": auto_report.get("improvement_tips", []),
                                         }).execute()
                                         print("[Supabase] 報告自動儲存成功")
                             except Exception as e:
@@ -1125,22 +1127,112 @@ with tab3:
                 for name, stats in employee_stats.items():
                     sl = stats["scores"]
                     leaderboard.append({
-                        "員工姓名":   name,
-                        "最高分":     max(sl),
-                        "平均分":     f"{sum(sl)/len(sl):.1f}",
-                        "訓練次數":   len(sl),
-                        "獎金達標次數": stats["bonus_count"],
-                        "最後訓練日期": stats["last_training"],
+                        "員工姓名":      name,
+                        "最新分數":      sl[0],
+                        "80分以上次數":  sum(1 for s in sl if s >= 80),
+                        "訓練次數":      len(sl),
+                        "最後訓練日期":  stats["last_training"],
                     })
-                leaderboard.sort(key=lambda x: x["最高分"], reverse=True)
+                leaderboard.sort(key=lambda x: x["最新分數"], reverse=True)
 
                 medals = ["🥇", "🥈", "🥉"]
                 for i, row in enumerate(leaderboard):
                     row["名次"] = medals[i] if i < 3 else f"#{i+1}"
 
                 df = pd.DataFrame(leaderboard)
-                cols = ["名次", "員工姓名", "最高分", "平均分", "訓練次數", "獎金達標次數", "最後訓練日期"]
+                cols = ["名次", "員工姓名", "最新分數", "80分以上次數", "訓練次數", "最後訓練日期"]
                 st.dataframe(df[cols], use_container_width=True, hide_index=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                selected_employee = st.selectbox(
+                    "👤 查看員工詳細訓練紀錄",
+                    options=["（請選擇）"] + [row["員工姓名"] for row in leaderboard]
+                )
+
+                if selected_employee != "（請選擇）":
+                    emp_records = [
+                        s for s in scores_data
+                        if s.get("employee_name") == selected_employee
+                    ]
+
+                    if emp_records:
+                        latest = emp_records[0]
+                        st.markdown(f"### 📋 {selected_employee} 的最近一次訓練")
+
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            score_v = latest.get("score", 0)
+                            color = "#28a745" if score_v >= 80 else ("#ffc107" if score_v >= 60 else "#dc3545")
+                            st.markdown(
+                                f'<div style="background:rgba(255,255,255,0.05);border-radius:12px;'
+                                f'padding:1.2rem;text-align:center;">'
+                                f'<div style="font-size:0.85rem;color:#adb5bd;">綜合分數</div>'
+                                f'<div style="font-size:2.5rem;font-weight:700;color:{color};">{score_v}</div>'
+                                f'<div style="font-size:0.85rem;color:#adb5bd;">{latest.get("closing_result","")}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                        with col_b:
+                            strength = latest.get("strength", "")
+                            if strength:
+                                st.markdown(
+                                    f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
+                                    f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                    f'<div style="font-size:0.8rem;color:#28a745;font-weight:700;">✨ 本次亮點</div>'
+                                    f'<div style="font-size:0.9rem;color:#e9ecef;margin-top:0.3rem;">{strength}</div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
+
+                        tips = latest.get("improvement_tips", [])
+                        if tips:
+                            st.markdown("**🎯 改善建議**")
+                            for i, tip in enumerate(tips, 1):
+                                st.markdown(
+                                    f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
+                                    f'border-radius:0 12px 12px 0;padding:0.8rem 1.2rem;margin-bottom:0.5rem;">'
+                                    f'<span style="font-size:0.8rem;color:#ffc107;">改善點 {i}</span><br>'
+                                    f'<span style="font-size:0.9rem;color:#e9ecef;">{tip}</span>'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
+
+                        col_lb, col_rb = st.columns(2)
+                        with col_lb:
+                            st.markdown(
+                                f'<div style="background:rgba(0,123,255,0.08);border-left:4px solid #007bff;'
+                                f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                f'<div style="font-size:0.8rem;color:#4dabf7;font-weight:700;">🔵 左腦分析</div>'
+                                f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
+                                f'{latest.get("left_brain","—")}</div></div>',
+                                unsafe_allow_html=True
+                            )
+                        with col_rb:
+                            st.markdown(
+                                f'<div style="background:rgba(220,53,69,0.08);border-left:4px solid #e05c6e;'
+                                f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                f'<div style="font-size:0.8rem;color:#f783ac;font-weight:700;">🔴 右腦分析</div>'
+                                f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
+                                f'{latest.get("right_brain","—")}</div></div>',
+                                unsafe_allow_html=True
+                            )
+
+                        st.markdown(f"**💡 培訓建議：** {latest.get('action_item','—')}")
+
+                        if len(emp_records) > 1:
+                            st.markdown("**📅 歷史訓練記錄**")
+                            for rec in emp_records[1:6]:
+                                rec_score = rec.get("score", 0)
+                                rec_color = "#28a745" if rec_score >= 80 else ("#ffc107" if rec_score >= 60 else "#dc3545")
+                                rec_date = rec.get("created_at", "")[:10]
+                                st.markdown(
+                                    f'<div style="background:rgba(255,255,255,0.03);border-left:3px solid {rec_color};'
+                                    f'border-radius:0 8px 8px 0;padding:0.5rem 1rem;margin-bottom:0.4rem;">'
+                                    f'{rec_date}　<span style="color:{rec_color};font-weight:700;">{rec_score} 分</span>'
+                                    f'　{rec.get("closing_result","")}'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
 
                 st.markdown("---")
                 st.markdown("### 🚨 需要主管關注")
@@ -1208,22 +1300,71 @@ with tab3:
 
                 st.markdown("---")
 
-                # ── 團隊弱點分析 ──────────────────────────
-                st.markdown("### 🧠 團隊弱點分析")
+                # ── 團隊指導建議 ──────────────────────────
+                st.markdown("### 🧭 團隊指導建議")
 
-                avg_left  = avg_score * 0.35
-                avg_right = avg_score * 0.35
-                col_weak1, col_weak2 = st.columns(2)
-                with col_weak1:
-                    st.metric("🔵 左腦邏輯平均", f"{avg_left:.1f} / 35 分")
-                with col_weak2:
-                    st.metric("🔴 右腦溝通平均", f"{avg_right:.1f} / 35 分")
+                # 計算關鍵數據
+                closing_results = [s.get("closing_result", "") for s in scores_data]
+                close_count     = closing_results.count("當場成交")
+                delay_count     = closing_results.count("有條件延遲")
+                reject_count    = closing_results.count("拒絕成交")
+                close_rate      = (close_count / total_sessions * 100) if total_sessions > 0 else 0
 
-                if leaderboard:
-                    weakest = min(leaderboard, key=lambda x: float(x["平均分"]))
-                    st.warning(
-                        f"⚠️ **培訓建議**：{weakest['員工姓名']} 的平均分為 "
-                        f"{weakest['平均分']} 分，建議安排一對一輔導。"
+                low_score_count  = sum(1 for s in scores_data if s.get("score", 0) < 60)
+                high_score_count = sum(1 for s in scores_data if s.get("score", 0) >= 80)
+
+                # 顯示關鍵指標
+                col_c1, col_c2, col_c3 = st.columns(3)
+                with col_c1:
+                    st.metric("✅ 當場成交率", f"{close_rate:.0f}%")
+                with col_c2:
+                    st.metric("⏳ 延遲決策次數", f"{delay_count} 次")
+                with col_c3:
+                    st.metric("❌ 拒絕成交次數", f"{reject_count} 次")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # 根據數據產生具體指導建議
+                suggestions = []
+
+                if avg_score < 60:
+                    suggestions.append(("🔴 立即行動",
+                        "整體分數偏低，建議本週安排基礎銷售技巧培訓，重點訓練產品知識表達與開場白設計。"))
+                elif avg_score < 70:
+                    suggestions.append(("🟡 近期行動",
+                        "整體表現尚可但未達標，建議安排異議處理專項訓練，加強回應客戶常見疑慮的話術。"))
+                else:
+                    suggestions.append(("🟢 維持精進",
+                        "整體表現良好，建議安排進階情境演練，針對高難度客戶類型（如強烈比價型）進行專項訓練。"))
+
+                if close_rate < 30:
+                    suggestions.append(("🔴 成交能力",
+                        f"當場成交率僅 {close_rate:.0f}%，建議重點加強促成技巧與現場引導決策的話術，"
+                        f"可安排角色扮演練習「如何在客戶猶豫時推進成交」。"))
+                elif delay_count > total_sessions * 0.5:
+                    suggestions.append(("🟡 促成技巧",
+                        "超過一半的演練結果為「有條件延遲」，客戶傾向不當場決定。"
+                        "建議加強緊迫感製造與即時解除疑慮的能力。"))
+
+                if low_score_count > 0:
+                    low_names = [
+                        s.get("employee_name", "匿名員工")
+                        for s in scores_data if s.get("score", 0) < 60
+                    ]
+                    unique_low = list(dict.fromkeys(low_names))[:3]
+                    suggestions.append(("🔴 個別輔導",
+                        f"以下成員有低於 60 分的訓練記錄，建議安排一對一輔導：{', '.join(unique_low)}"))
+
+                for title, content in suggestions:
+                    color = "#dc3545" if "🔴" in title else ("#ffc107" if "🟡" in title else "#28a745")
+                    st.markdown(
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {color};'
+                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-bottom:0.8rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:{color};margin-bottom:0.4rem;">'
+                        f'{title}</div>'
+                        f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
                     )
 
                 st.markdown("---")

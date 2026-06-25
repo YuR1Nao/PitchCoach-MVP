@@ -1,1 +1,10 @@
 .env
+company_settings.json
+**/__pycache__/
+**/*.pyc
+*.pyc
+main copy.py
+main copy 2.py
+.streamlit/secrets.toml
+*.pdf
+*.docx
