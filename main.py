@@ -915,7 +915,8 @@ if tab2 is not None:
                                 chat_history        = st.session_state.get("chat_history", []),
                                 published_questions = published_questions,
                                 customer_scenario   = st.session_state.get("customer_scenario", ""),
-                                product_benefits    = st.session_state.get("product_benefits", "")
+                                product_benefits    = st.session_state.get("product_benefits", ""),
+                                training_mode       = st.session_state.get("training_mode", "speed")
                             )
                             st.session_state["evaluation_report"] = auto_report
 

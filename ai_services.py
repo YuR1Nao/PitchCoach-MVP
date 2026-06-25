@@ -208,7 +208,8 @@ def get_evaluation_report(
     chat_history: list[dict],
     published_questions: list[str],
     customer_scenario: str = "",
-    product_benefits: str = ""
+    product_benefits: str = "",
+    training_mode: str = "speed"
 ) -> dict:
     """
     呼叫 Claude 以嚴格銷售總監身份評分，強制輸出 JSON。
@@ -241,6 +242,22 @@ def get_evaluation_report(
     scenario_block = f"客戶情境設定：{customer_scenario.strip()}" if customer_scenario.strip() else "客戶情境：一般 B2C 消費者"
     benefits_block  = product_benefits or "（未提供產品賣點資訊）"
 
+    _scoring_block = (
+        """
+【急速模式 — 不評估成交能力】
+- 左腦邏輯（50 分）：賣點覆蓋率、關鍵資訊準確性、回應客戶疑慮的完整度
+- 右腦溝通（50 分）：語氣自然度、同理心表達、是否成功降低客戶疑慮、說話方式是否貼近客戶情境
+- 成交能力：本模式不評估，closing_result 固定填「急速模式不評估成交」
+"""
+        if training_mode == "speed" else
+        """
+【深度模式 — 完整評估三大維度】
+- 左腦邏輯（35 分）：賣點覆蓋率、關鍵資訊準確性、回應客戶疑慮的完整度
+- 右腦溝通（35 分）：語氣自然度、同理心表達、是否成功降低客戶疑慮、說話方式是否貼近客戶情境
+- 成交能力（30 分）：是否識別購買信號、是否主動創造成交條件、最終客戶是否成交或給出明確購買意願
+"""
+    )
+
     system_prompt = """你是一位嚴格但客觀的企業銷售總監，正在為業務員做最終戰力評估。
 你必須分析業務員在剛才對話中的表現，並嚴格輸出以下 JSON 格式，不可包含任何其他文字：
 
@@ -260,10 +277,7 @@ def get_evaluation_report(
 }
 
 評分維度（共 100 分）：
-- 左腦邏輯（35 分）：賣點覆蓋率、關鍵資訊準確性、回應客戶疑慮的完整度
-- 右腦溝通（35 分）：語氣自然度、同理心表達、是否成功降低客戶疑慮、說話方式是否貼近客戶情境
-- 成交能力（30 分）：是否識別購買信號、是否主動創造成交條件、最終客戶是否成交或給出明確購買意願
-
+""" + _scoring_block + """
 closing_result 填寫規則：
 - 「當場成交」：客戶明確表示要購買或給出具體購買條件
 - 「有條件延遲」：客戶有興趣但要求優惠/試用/再想想
