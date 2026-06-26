@@ -1124,9 +1124,15 @@ with tab3:
 
                 total_sessions = len(scores_data)
                 avg_score      = sum(s.get("score", 0) for s in scores_data) / total_sessions
-                pass_count     = sum(1 for s in scores_data if s.get("score", 0) >= 80)
-                pass_rate      = (pass_count / total_sessions) * 100
-                bonus_count    = sum(1 for s in scores_data if s.get("bonus_unlocked"))
+
+                # 每人取最新一次分數（scores_data 已按 created_at desc 排序）
+                latest_by_employee = {}
+                for s in scores_data:
+                    name = s.get("employee_name", "匿名員工")
+                    if name not in latest_by_employee:
+                        latest_by_employee[name] = s.get("score", 0)
+                latest_avg   = sum(latest_by_employee.values()) / len(latest_by_employee) if latest_by_employee else 0
+                active_count = len(latest_by_employee)
 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -1134,10 +1140,11 @@ with tab3:
                 with col2:
                     st.metric("📊 團隊平均分", f"{avg_score:.1f} 分")
                 with col3:
-                    st.metric("🏅 達標率", f"{pass_rate:.0f}%",
-                              help="分數 ≥ 80 分視為達標")
+                    st.metric("📈 最新平均分", f"{latest_avg:.1f} 分",
+                              help="每位員工取最新一次分數後平均，反映團隊現況而非歷史累積")
                 with col4:
-                    st.metric("💰 獎金解鎖次數", f"{bonus_count} 次")
+                    st.metric("👥 活躍員工數", f"{active_count} 人",
+                              help="至少完成過一次訓練的員工人數")
 
                 st.markdown("---")
 
