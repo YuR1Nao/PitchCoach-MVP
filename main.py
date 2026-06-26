@@ -926,32 +926,43 @@ if tab2 is not None:
                                 company_id    = get_or_create_company(st.session_state.get("current_company", ""))
                                 employee_name = st.session_state.get("employee_name", "匿名員工")
                                 t_mode        = st.session_state.get("training_mode", "speed")
-                                if company_id:
-                                    session_result = sb.table("sessions").insert({
-                                        "company_id":    company_id,
-                                        "chat_history":  st.session_state.get("chat_history", []),
-                                        "is_completed":  True,
-                                        "employee_name": employee_name,
-                                        "training_mode": t_mode,
-                                    }).execute()
-                                    session_id = session_result.data[0]["id"] if session_result.data else None
-                                    if session_id:
-                                        sb.table("scores").insert({
-                                            "session_id":     session_id,
-                                            "company_id":     company_id,
-                                            "employee_name":  employee_name,
-                                            "score":          auto_report.get("score", 0),
-                                            "bonus_unlocked": auto_report.get("bonus_unlocked", False),
-                                            "left_brain":     auto_report.get("left_brain", ""),
-                                            "right_brain":    auto_report.get("right_brain", ""),
-                                            "action_item":    auto_report.get("action_item", ""),
-                                            "closing_result":   auto_report.get("closing_result", ""),
-                                            "strength":         auto_report.get("strength", ""),
-                                            "improvement_tips": auto_report.get("improvement_tips", []),
+
+                                if not company_id:
+                                    st.warning("⚠️ 無法取得公司 ID，報告未儲存")
+                                else:
+                                    # 步驟一：寫入 sessions
+                                    try:
+                                        session_result = sb.table("sessions").insert({
+                                            "company_id":    company_id,
+                                            "employee_name": employee_name,
+                                            "is_completed":  True,
                                         }).execute()
-                                        print("[Supabase] 報告自動儲存成功")
+                                        session_id = session_result.data[0]["id"] if session_result.data else None
+                                    except Exception as e1:
+                                        st.warning(f"⚠️ sessions 寫入失敗：{e1}")
+                                        session_id = None
+
+                                    # 步驟二：寫入 scores
+                                    if session_id:
+                                        try:
+                                            sb.table("scores").insert({
+                                                "session_id":     session_id,
+                                                "company_id":     company_id,
+                                                "employee_name":  employee_name,
+                                                "score":          auto_report.get("score", 0),
+                                                "bonus_unlocked": auto_report.get("bonus_unlocked", False),
+                                                "left_brain":     auto_report.get("left_brain", ""),
+                                                "right_brain":    auto_report.get("right_brain", ""),
+                                                "action_item":    auto_report.get("action_item", ""),
+                                                "closing_result": auto_report.get("closing_result", ""),
+                                                "strength":       auto_report.get("strength", ""),
+                                                "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
+                                            }).execute()
+                                            print("[Supabase] 報告自動儲存成功")
+                                        except Exception as e2:
+                                            st.warning(f"⚠️ scores 寫入失敗：{e2}")
                             except Exception as e:
-                                print(f"[Supabase警告] 自動儲存失敗：{e}")
+                                st.warning(f"⚠️ Supabase 連線失敗：{e}")
 
                             st.session_state["is_completed"] = True
 
