@@ -14,7 +14,7 @@ load_dotenv()
 from config import *
 from database import get_supabase, load_settings, get_or_create_company, save_settings
 from ai_services import (
-    clean_text_for_tts, generate_tts_audio, speech_to_text,
+    clean_text_for_tts, speech_to_text,
     get_coach_hint, get_evaluation_report, extract_text_from_bytes,
     analyze_with_claude, generate_questions_json, parse_analysis_and_questions,
     extract_section, get_customer_response
@@ -312,11 +312,9 @@ if tab1 is not None:
                         for i in range(15):
                             st.session_state.pop(f"q_text_{i}", None)
                             st.session_state.pop(f"q_check_{i}", None)
-                        # 清除員工端舊的對話記錄與按需生成的 TTS 快取
+                        # 清除員工端舊的對話記錄
                         st.session_state.pop("chat_history", None)
                         st.session_state.pop("current_q_idx", None)
-                        for i in range(50):
-                            st.session_state.pop(f"tts_audio_{i}", None)
 
                 except anthropic.AuthenticationError:
                     st.error("❌ API Key 驗證失敗，請確認 main.py 第 15 行的 Key 是否正確。")
@@ -440,8 +438,6 @@ if tab1 is not None:
                         st.session_state.pop("current_q_idx", None)
                         st.session_state.pop("is_completed", None)
                         st.session_state.pop("evaluation_report", None)
-                        for i in range(50):
-                            st.session_state.pop(f"tts_audio_{i}", None)
                         st.rerun()
 
                     if st.session_state.get("task_published", False):
@@ -523,8 +519,6 @@ if tab1 is not None:
                         st.session_state.pop("current_q_idx", None)
                         st.session_state.pop("is_completed", None)
                         st.session_state.pop("evaluation_report", None)
-                        for i in range(50):
-                            st.session_state.pop(f"tts_audio_{i}", None)
                         save_settings()
                         st.rerun()
 
@@ -854,17 +848,6 @@ if tab2 is not None:
                             )
                             st.markdown(display_content)
 
-                            # TTS 按需生成：有快取直接播放，沒有則顯示按鈕
-                            tts_key = f"tts_audio_{i}"
-                            if st.session_state.get(tts_key):
-                                st.audio(st.session_state[tts_key], format="audio/mp3", autoplay=False)
-                            else:
-                                if st.button("🔊 聆聽語音", key=f"tts_btn_{i}"):
-                                    with st.spinner("生成中..."):
-                                        audio = generate_tts_audio(display_content)
-                                        st.session_state[f"tts_audio_{i}"] = audio
-                                    st.rerun()
-
             # 教練提示顯示區（只在教練模式開啟 & 有提示時出現）
             # 此處只顯示，不存入 chat_history，客戶 AI 完全看不到
             if coach_mode and st.session_state.get("coach_hint"):
@@ -1061,10 +1044,7 @@ if tab2 is not None:
                 st.session_state["q_turn_count"] = 0
             st.session_state["current_q_idx"] = new_idx
 
-            # 步驟 4：不預先生成 TTS，讓畫面立即渲染文字
-            # 用戶點擊「🔊 聆聽語音」按鈕時才觸發生成（按需模式）
-
-            # 步驟 5：若教練輔助模式已開啟，自動在背景呼叫教練取得戰術提示
+            # 步驟 4：若教練輔助模式已開啟，自動在背景呼叫教練取得戰術提示
             # 教練提示絕不存入 chat_history，客戶 AI 完全看不到這段內容
             if coach_mode:
                 try:
