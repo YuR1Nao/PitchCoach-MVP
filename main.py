@@ -908,12 +908,12 @@ if tab2 is not None:
                                 sb            = get_supabase()
                                 company_id    = get_or_create_company(st.session_state.get("current_company", ""))
                                 employee_name = st.session_state.get("employee_name", "匿名員工")
-                                t_mode        = st.session_state.get("training_mode", "speed")
 
                                 if not company_id:
-                                    st.warning("⚠️ 無法取得公司 ID，報告未儲存")
+                                    st.session_state["_save_error"] = "無法取得公司 ID，報告未儲存"
                                 else:
-                                    # 步驟一：寫入 sessions
+                                    # 步驟一：寫入 sessions（失敗不影響 scores）
+                                    session_id = None
                                     try:
                                         session_result = sb.table("sessions").insert({
                                             "company_id":    company_id,
@@ -922,30 +922,31 @@ if tab2 is not None:
                                         }).execute()
                                         session_id = session_result.data[0]["id"] if session_result.data else None
                                     except Exception as e1:
-                                        st.warning(f"⚠️ sessions 寫入失敗：{e1}")
-                                        session_id = None
+                                        st.session_state["_save_error"] = f"sessions 寫入失敗：{e1}"
 
-                                    # 步驟二：寫入 scores
-                                    if session_id:
-                                        try:
-                                            sb.table("scores").insert({
-                                                "session_id":     session_id,
-                                                "company_id":     company_id,
-                                                "employee_name":  employee_name,
-                                                "score":          auto_report.get("score", 0),
-                                                "bonus_unlocked": auto_report.get("bonus_unlocked", False),
-                                                "left_brain":     auto_report.get("left_brain", ""),
-                                                "right_brain":    auto_report.get("right_brain", ""),
-                                                "action_item":    auto_report.get("action_item", ""),
-                                                "closing_result": auto_report.get("closing_result", ""),
-                                                "strength":       auto_report.get("strength", ""),
-                                                "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
-                                            }).execute()
-                                            print("[Supabase] 報告自動儲存成功")
-                                        except Exception as e2:
-                                            st.warning(f"⚠️ scores 寫入失敗：{e2}")
+                                    # 步驟二：寫入 scores（不依賴 session_id，確保一定寫入）
+                                    try:
+                                        scores_payload = {
+                                            "company_id":     company_id,
+                                            "employee_name":  employee_name,
+                                            "score":          auto_report.get("score", 0),
+                                            "bonus_unlocked": auto_report.get("bonus_unlocked", False),
+                                            "left_brain":     auto_report.get("left_brain", ""),
+                                            "right_brain":    auto_report.get("right_brain", ""),
+                                            "action_item":    auto_report.get("action_item", ""),
+                                            "closing_result": auto_report.get("closing_result", ""),
+                                            "strength":       auto_report.get("strength", ""),
+                                            "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
+                                        }
+                                        if session_id:
+                                            scores_payload["session_id"] = session_id
+                                        sb.table("scores").insert(scores_payload).execute()
+                                        st.session_state.pop("_save_error", None)
+                                        print("[Supabase] scores 儲存成功")
+                                    except Exception as e2:
+                                        st.session_state["_save_error"] = f"scores 寫入失敗：{e2}"
                             except Exception as e:
-                                st.warning(f"⚠️ Supabase 連線失敗：{e}")
+                                st.session_state["_save_error"] = f"Supabase 連線失敗：{e}"
 
                             st.session_state["is_completed"] = True
 
@@ -1418,6 +1419,9 @@ with tab3:
     # 視角二：個人報告（本次訓練）
     # ══════════════════════════════════════════════════
     else:
+        if st.session_state.get("_save_error"):
+            st.warning(f"⚠️ 儲存失敗（請截圖回報）：{st.session_state['_save_error']}")
+
         is_completed = st.session_state.get("is_completed", False)
         chat_history_for_report = st.session_state.get("chat_history", [])
         published_questions_for_report = (
