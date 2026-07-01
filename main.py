@@ -894,8 +894,17 @@ if tab2 is not None:
                 if st.button("📊 結束對話，查看報告", type="primary", key="end_session_btn"):
                     with st.spinner("🤖 AI 正在分析你的表現，請稍候..."):
                         try:
+                            # 只評分到 [TEST_COMPLETE] 為止，不包含通關後的額外對話
+                            _full_history = st.session_state.get("chat_history", [])
+                            _cut_idx = None
+                            for _i, _msg in enumerate(_full_history):
+                                if "[TEST_COMPLETE]" in _msg.get("content", ""):
+                                    _cut_idx = _i
+                                    break
+                            _eval_history = _full_history[:_cut_idx + 1] if _cut_idx is not None else _full_history
+
                             auto_report = get_evaluation_report(
-                                chat_history        = st.session_state.get("chat_history", []),
+                                chat_history        = _eval_history,
                                 published_questions = published_questions,
                                 customer_scenario   = st.session_state.get("customer_scenario", ""),
                                 product_benefits    = st.session_state.get("product_benefits", ""),
@@ -934,7 +943,6 @@ if tab2 is not None:
                                             "left_brain":     auto_report.get("left_brain", ""),
                                             "right_brain":    auto_report.get("right_brain", ""),
                                             "action_item":    auto_report.get("action_item", ""),
-                                            "closing_result": auto_report.get("closing_result", ""),
                                             "strength":       auto_report.get("strength", ""),
                                             "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
                                         }
