@@ -14,7 +14,7 @@ load_dotenv()
 
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
-                      get_all_training_sets, delete_training_set)
+                      get_all_training_sets, delete_training_set, toggle_training_set_active)
 from ai_services import (
     clean_text_for_tts, speech_to_text,
     get_coach_hint, get_evaluation_report, extract_text_from_bytes,
@@ -203,15 +203,31 @@ if tab1 is not None:
         _existing_pdfs = get_all_training_sets(_company_id_for_list)
         if _existing_pdfs:
             st.markdown("### 📚 已上傳的教材文件")
+            st.caption("關閉開關可暫時停用該文件的題目，不刪除資料，可隨時重新啟用。")
             for _pdf in _existing_pdfs:
                 _q_count = sum(
                     len(v) for v in (_pdf.get("questions_by_category") or {}).values()
                 )
-                _col_name, _col_count, _col_del = st.columns([0.65, 0.20, 0.15])
+                _is_active = _pdf.get("is_active", True)
+                _col_name, _col_count, _col_toggle, _col_del = st.columns([0.50, 0.15, 0.20, 0.15])
                 with _col_name:
-                    st.markdown(f"📄 **{_pdf.get('filename', '未命名')}**")
+                    _status_icon = "✅" if _is_active else "⬜"
+                    st.markdown(f"{_status_icon} 📄 **{_pdf.get('filename', '未命名')}**")
                 with _col_count:
                     st.caption(f"{_q_count} 題")
+                with _col_toggle:
+                    _new_state = st.toggle(
+                        "啟用中" if _is_active else "已停用",
+                        value=_is_active,
+                        key=f"toggle_pdf_{_pdf['id']}"
+                    )
+                    if _new_state != _is_active:
+                        if toggle_training_set_active(_pdf["id"], _new_state):
+                            for _k in ["questions", "questions_by_category",
+                                       "analyzed_filename", "task_published",
+                                       "published_questions"]:
+                                st.session_state.pop(_k, None)
+                            st.rerun()
                 with _col_del:
                     if st.button("🗑️", key=f"del_pdf_{_pdf['id']}"):
                         if delete_training_set(_pdf["id"]):

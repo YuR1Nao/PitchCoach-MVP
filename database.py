@@ -35,6 +35,8 @@ def load_settings() -> None:
             "company_id", company_id
         ).eq(
             "is_published", True
+        ).eq(
+            "is_active", True
         ).order(
             "created_at", desc=False
         ).execute()
@@ -113,7 +115,7 @@ def get_all_training_sets(company_id: str) -> list:
     try:
         sb = get_supabase()
         result = sb.table("training_sets").select(
-            "id, filename, questions_by_category, created_at"
+            "id, filename, questions_by_category, created_at, is_active"
         ).eq("company_id", company_id).eq(
             "is_published", True
         ).order("created_at", desc=False).execute()
@@ -131,6 +133,19 @@ def delete_training_set(training_set_id: str) -> bool:
         return True
     except Exception as e:
         print(f"[Supabase警告] delete_training_set 失敗：{e}")
+        return False
+
+
+def toggle_training_set_active(training_set_id: str, is_active: bool) -> bool:
+    """切換指定訓練集的啟用/停用狀態"""
+    try:
+        sb = get_supabase()
+        sb.table("training_sets").update(
+            {"is_active": is_active}
+        ).eq("id", training_set_id).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase警告] toggle_training_set_active 失敗：{e}")
         return False
 
 
