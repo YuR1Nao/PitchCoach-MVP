@@ -554,8 +554,19 @@ if tab1 is not None:
                             if not cat_qs:
                                 continue
                             with st.expander(f"{cat_label}（{len(cat_qs)} 題）", expanded=False):
-                                for q in cat_qs:
-                                    st.markdown(f"• {q[:100]}{'...' if len(q) > 100 else ''}")
+                                for qi, q in enumerate(cat_qs):
+                                    if "👉" in q:
+                                        q_display, q_hint = q.split("👉", 1)
+                                    else:
+                                        q_display, q_hint = q, ""
+                                    st.text_input(
+                                        label=f"{cat_key}_{qi}",
+                                        value=q_display.strip(),
+                                        key=f"random_q_{cat_key}_{qi}",
+                                        label_visibility="collapsed"
+                                    )
+                                    if q_hint:
+                                        st.caption(f"💡 建議回答方向：{q_hint.strip()}")
                     else:
                         # ── 舊版相容：無分類資料，顯示扁平列表 ────────────
                         for i, q_text in enumerate(questions):

@@ -196,7 +196,7 @@ def get_coach_hint(
 請給出一到兩句戰術提示："""
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=300,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}]
@@ -306,7 +306,7 @@ improvement_tips 填寫規則：
 請輸出 JSON 評分報告："""
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=1500,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}]
@@ -379,7 +379,7 @@ def analyze_with_claude(document_text: str) -> str:
 只輸出以上四個章節，不要加入任何考題或其他內容。"""
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=2048,
         system=system_prompt,
         messages=[{"role": "user", "content": f"以下是教材內容：\n\n{document_text}"}]
@@ -429,11 +429,11 @@ def generate_questions_json(document_text: str) -> dict:
 【強制輸出格式】
 你的整個回覆必須是一個合法的JSON物件：
 {
-  "cat_1_product": ["Q1. 客戶問題", "Q2. 客戶問題"],
-  "cat_2_price": ["Q1. 客戶問題"],
+  "cat_1_product": ["Q1. 客戶問題 👉 建議回答方向：具體建議", "Q2. ..."],
+  "cat_2_price": ["Q1. 客戶問題 👉 建議回答方向：具體建議"],
   "cat_3_trust": [],
   "cat_4_competition": [],
-  "cat_5_decision": ["Q1. 客戶問題", "Q2. 客戶問題"]
+  "cat_5_decision": ["Q1. 客戶問題 👉 建議回答方向：具體建議"]
 }
 
 【五大類別定義】
@@ -465,13 +465,15 @@ cat_5_decision（決策障礙類）：
 
 【重要規定】
 - 只輸出JSON物件，不要有任何其他文字
-- 每道題格式：「Q數字. 客戶說的話」，例如「Q1. 這個效果有保證嗎？」
+- 每道題格式：「Q數字. 客戶說的話 👉 建議回答方向：具體建議」
+- 客戶問題必須是客戶會說的話，不是產品說明
+- 建議回答方向必須根據文件的真實資訊撰寫，不要憑空捏造
 - 每個類別最多5題，最少0題
 - 沒有足夠素材的類別請回傳空陣列 []
 """
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=4096,
         system=system_prompt,
         messages=[{"role": "user", "content": f"以下是教材內容：\n\n{document_text}"}]
@@ -748,7 +750,7 @@ def get_customer_response(
 {task_instruction}"""
 
     response = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-5",
         max_tokens=max_tokens_val,
         system=system,
         messages=chat_history
