@@ -417,6 +417,35 @@ if tab1 is not None:
                     else:
                         st.warning(f"⚠️ 請剛好勾選 {REQUIRED_SELECTION} 題作為本次訓練任務（目前 {checked_count} 題，請取消 {checked_count - REQUIRED_SELECTION} 題）")
 
+                    # ── 主管自訂考題 ──────────────────────
+                    st.markdown("---")
+                    st.markdown("#### ✏️ 主管自訂考題")
+                    st.caption("AI 沒有出到的問題，可以在這裡手動新增。")
+
+                    col_input, col_btn = st.columns([0.82, 0.18])
+                    with col_input:
+                        new_q = st.text_input(
+                            label="輸入自訂考題",
+                            placeholder="例如：你們的產品跟市面上的有什麼不同？",
+                            key="new_custom_q_input",
+                            label_visibility="collapsed"
+                        )
+                    with col_btn:
+                        if st.button("➕ 新增", use_container_width=True):
+                            if new_q.strip():
+                                st.session_state["custom_questions"].append(new_q.strip())
+                                st.rerun()
+
+                    if st.session_state.get("custom_questions"):
+                        for ci, cq in enumerate(st.session_state["custom_questions"]):
+                            col_cq, col_del = st.columns([0.88, 0.12])
+                            with col_cq:
+                                st.info(f"✏️ {cq}")
+                            with col_del:
+                                if st.button("🗑️", key=f"del_custom_{ci}"):
+                                    st.session_state["custom_questions"].pop(ci)
+                                    st.rerun()
+
                     st.markdown("<br>", unsafe_allow_html=True)
 
                     publish_button = st.button(
@@ -433,6 +462,11 @@ if tab1 is not None:
                             if st.session_state.get(f"q_check_{i}", False)
                         ]
                         st.session_state["published_questions"] = selected_qs
+                        # 合併主管自訂問題
+                        if st.session_state.get("custom_questions"):
+                            st.session_state["published_questions"].extend(
+                                st.session_state["custom_questions"]
+                            )
                         st.session_state["task_published"]      = True
                         st.session_state.pop("chat_history", None)
                         st.session_state.pop("current_q_idx", None)
@@ -499,6 +533,35 @@ if tab1 is not None:
                             st.markdown('</div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.success(f"✅ 共 {total_q} 題已載入題庫，系統將每次隨機抽取 2 題。")
+
+                    # ── 主管自訂考題 ──────────────────────
+                    st.markdown("---")
+                    st.markdown("#### ✏️ 主管自訂考題")
+                    st.caption("AI 沒有出到的問題，可以在這裡手動新增。")
+
+                    col_input_r, col_btn_r = st.columns([0.82, 0.18])
+                    with col_input_r:
+                        new_q_r = st.text_input(
+                            label="輸入自訂考題（隨機模式）",
+                            placeholder="例如：你們的產品跟市面上的有什麼不同？",
+                            key="new_custom_q_input_random",
+                            label_visibility="collapsed"
+                        )
+                    with col_btn_r:
+                        if st.button("➕ 新增", use_container_width=True, key="add_custom_random"):
+                            if new_q_r.strip():
+                                st.session_state["custom_questions"].append(new_q_r.strip())
+                                st.rerun()
+
+                    if st.session_state.get("custom_questions"):
+                        for ci, cq in enumerate(st.session_state["custom_questions"]):
+                            col_cq_r, col_del_r = st.columns([0.88, 0.12])
+                            with col_cq_r:
+                                st.info(f"✏️ {cq}")
+                            with col_del_r:
+                                if st.button("🗑️", key=f"del_custom_r_{ci}"):
+                                    st.session_state["custom_questions"].pop(ci)
+                                    st.rerun()
 
                     publish_random_btn = st.button(
                         "🚀 儲存並啟用隨機挑戰模式",
@@ -698,6 +761,8 @@ if tab2 is not None:
             st.session_state["chat_history"]  = []
             st.session_state["current_q_idx"] = 0
             st.session_state["q_turn_count"]  = 0  # 急速模式每題回合計數器
+        if "custom_questions" not in st.session_state:
+            st.session_state["custom_questions"] = []
 
         current_q_idx = st.session_state["current_q_idx"]
         chat_history  = st.session_state["chat_history"]
