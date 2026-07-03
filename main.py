@@ -562,16 +562,23 @@ if tab1 is not None:
                                 for qi, q in enumerate(cat_qs):
                                     if "👉" in q:
                                         q_display, q_hint = q.split("👉", 1)
+                                        # 去除 AI 已經生成的「建議回答方向：」前綴，避免重複
+                                        q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', q_hint.strip())
                                     else:
                                         q_display, q_hint = q, ""
                                     st.text_input(
-                                        label=f"{cat_key}_{qi}",
+                                        label=f"題目",
                                         value=q_display.strip(),
                                         key=f"random_q_{cat_key}_{qi}",
                                         label_visibility="collapsed"
                                     )
-                                    if q_hint:
-                                        st.caption(f"💡 建議回答方向：{q_hint.strip()}")
+                                    st.text_input(
+                                        label="建議回答方向",
+                                        value=q_hint,
+                                        key=f"random_hint_{cat_key}_{qi}",
+                                        placeholder="輸入建議回答方向",
+                                    )
+                                    st.markdown("---")
                     else:
                         # ── 舊版相容：無分類資料，顯示扁平列表 ────────────
                         for i, q_text in enumerate(questions):
