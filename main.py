@@ -207,10 +207,10 @@ if tab1 is not None:
 
         mode = st.radio(
             label="選擇出題方式",
-            options=["🎯 主管精選模式", "🎲 隨機挑戰模式"],
+            options=["🎲 隨機挑戰模式", "🎯 主管精選模式"],
             key="question_mode",
             horizontal=True,
-            help="主管精選：手動勾選2題｜隨機挑戰：系統每次自動隨機抽2題"
+            help="隨機挑戰：系統每次自動隨機抽2題｜主管精選：手動勾選2題"
         )
 
         if mode == "🎲 隨機挑戰模式":
