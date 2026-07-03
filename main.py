@@ -476,6 +476,7 @@ if tab1 is not None:
                                 st.rerun()
 
                     if st.session_state.get("custom_questions"):
+                        st.caption("以下題目歸類為「✏️ 主管自訂類」，會與 AI 題目一起發布並可被隨機抽中。")
                         for ci, cq in enumerate(st.session_state["custom_questions"]):
                             col_cq, col_del = st.columns([0.88, 0.12])
                             with col_cq:
@@ -533,7 +534,9 @@ if tab1 is not None:
                 if total_q == 0:
                     st.info("ℹ️ 無法自動解析考題格式，請重新執行 AI 萃取。")
                 else:
-                    questions_by_category = st.session_state.get("questions_by_category", {})
+                    questions_by_category = dict(st.session_state.get("questions_by_category", {}))
+                    if st.session_state.get("custom_questions"):
+                        questions_by_category["cat_6_custom"] = st.session_state["custom_questions"]
 
                     if questions_by_category:
                         # ── 有分類資料：按類別摘要顯示（可折疊）────────────
@@ -548,6 +551,7 @@ if tab1 is not None:
                             "cat_3_trust":       "🛡️ 信任疑慮類",
                             "cat_4_competition": "⚔️ 競品比較類",
                             "cat_5_decision":    "🚪 決策障礙類",
+                            "cat_6_custom":      "✏️ 主管自訂類",
                         }
                         for cat_key, cat_label in cat_labels_short.items():
                             cat_qs = questions_by_category.get(cat_key, [])
@@ -625,6 +629,12 @@ if tab1 is not None:
                             st.session_state.get(f"q_text_random_{i}", q)
                             for i, q in enumerate(st.session_state.get("questions", []))
                         ]
+                        # 合併主管自訂問題進 cat_6_custom，確保能被隨機抽中
+                        _qbc_to_save = dict(st.session_state.get("questions_by_category", {}))
+                        if st.session_state.get("custom_questions"):
+                            _qbc_to_save["cat_6_custom"] = st.session_state["custom_questions"]
+                        st.session_state["questions_by_category"] = _qbc_to_save
+
                         st.session_state["questions"]           = all_questions
                         st.session_state["published_questions"] = []  # 員工端動態抽取
                         st.session_state["task_published"]      = True
