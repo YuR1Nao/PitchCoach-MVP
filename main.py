@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from config import *
-from database import get_supabase, load_settings, get_or_create_company, save_settings
+from database import (get_supabase, load_settings, get_or_create_company, save_settings,
+                      get_all_training_sets, delete_training_set)
 from ai_services import (
     clean_text_for_tts, speech_to_text,
     get_coach_hint, get_evaluation_report, extract_text_from_bytes,
@@ -194,6 +195,33 @@ if tab1 is not None:
 
     # ── 左欄：上傳與操作 ──────────────────────
     with col_left:
+        # ── 已上傳的 PDF 管理列表 ──────────────────────
+        _company_id_for_list = get_or_create_company(
+            st.session_state.get("current_company", "")
+        )
+        _existing_pdfs = get_all_training_sets(_company_id_for_list)
+        if _existing_pdfs:
+            st.markdown("### 📚 已上傳的教材文件")
+            for _pdf in _existing_pdfs:
+                _q_count = sum(
+                    len(v) for v in (_pdf.get("questions_by_category") or {}).values()
+                )
+                _col_name, _col_count, _col_del = st.columns([0.65, 0.20, 0.15])
+                with _col_name:
+                    st.markdown(f"📄 **{_pdf.get('filename', '未命名')}**")
+                with _col_count:
+                    st.caption(f"{_q_count} 題")
+                with _col_del:
+                    if st.button("🗑️", key=f"del_pdf_{_pdf['id']}"):
+                        if delete_training_set(_pdf["id"]):
+                            for _k in ["questions", "questions_by_category",
+                                       "analyzed_filename", "task_published",
+                                       "published_questions"]:
+                                st.session_state.pop(_k, None)
+                            st.success("✅ 已刪除，題庫已更新")
+                            st.rerun()
+            st.markdown("---")
+
         st.markdown("### 📂 上傳教材文件")
         uploaded_file = st.file_uploader(
             label="選擇 PDF 檔案",
@@ -293,11 +321,22 @@ if tab1 is not None:
                         for cat_questions in questions_dict.values():
                             all_questions.extend(cat_questions)
 
-                        st.session_state["main_analysis"]        = main_analysis
-                        st.session_state["questions"]            = all_questions
-                        st.session_state["questions_by_category"] = questions_dict
-                        st.session_state["analyzed_filename"] = uploaded_file.name
-                        st.session_state["task_published"]    = False
+                        # 累積合併：新 PDF 的題目加入現有題庫，不覆蓋
+                        _existing_qbc = st.session_state.get("questions_by_category") or {}
+                        for _cat, _qs in questions_dict.items():
+                            if _cat not in _existing_qbc:
+                                _existing_qbc[_cat] = []
+                            _existing_qbc[_cat].extend(_qs)
+
+                        _existing_qs = st.session_state.get("questions") or []
+                        _existing_fn = st.session_state.get("analyzed_filename", "")
+                        _new_fn = ((_existing_fn + "、") if _existing_fn else "") + uploaded_file.name
+
+                        st.session_state["main_analysis"]         = main_analysis
+                        st.session_state["questions"]             = _existing_qs + all_questions
+                        st.session_state["questions_by_category"] = _existing_qbc
+                        st.session_state["analyzed_filename"]     = _new_fn
+                        st.session_state["task_published"]        = False
 
                         # 動態提取各章節，供客戶 AI 與教練 AI 動態注入
                         # 以 emoji 為錨點，不依賴中文標題，對格式變動有高容錯率

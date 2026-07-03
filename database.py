@@ -30,32 +30,45 @@ def load_settings() -> None:
             raise ValueError("找不到公司記錄")
         company_id = company.data[0]["id"]
 
-        # 取得最新一筆已發布的訓練設定
+        # 取得所有已發布的訓練設定（按時間正序，最新的在最後）
         result = sb.table("training_sets").select("*").eq(
             "company_id", company_id
         ).eq(
             "is_published", True
         ).order(
-            "created_at", desc=True
-        ).limit(1).execute()
+            "created_at", desc=False
+        ).execute()
 
         if not result.data:
             raise ValueError("無已發布的訓練設定")
 
-        row = result.data[0]
+        # 合併所有 PDF 的題目
+        combined_questions = []
+        combined_by_category = {}
+        for row in result.data:
+            qbc = row.get("questions_by_category") or {}
+            for cat, qs in qbc.items():
+                if cat not in combined_by_category:
+                    combined_by_category[cat] = []
+                combined_by_category[cat].extend(qs)
+            combined_questions.extend(row.get("questions") or [])
+
+        # 其他設定從最新那筆取
+        latest = result.data[-1]
+        all_filenames = "、".join(r.get("filename", "") for r in result.data)
 
         # 欄位映射（Supabase 欄位名 → session_state 鍵名）
         mapping = {
-            "main_analysis":         row.get("main_analysis"),
-            "questions":             row.get("questions"),
-            "analyzed_filename":     row.get("filename"),
-            "product_name":          row.get("product_name"),
-            "product_benefits":      row.get("product_benefits"),
-            "target_audience":       row.get("target_audience"),
-            "published_questions":   row.get("published_questions"),
-            "customer_scenario":     row.get("customer_scenario"),
-            "task_published":        row.get("is_published", False),
-            "questions_by_category": row.get("questions_by_category"),
+            "main_analysis":         latest.get("main_analysis"),
+            "questions":             combined_questions,
+            "analyzed_filename":     all_filenames,
+            "product_name":          latest.get("product_name"),
+            "product_benefits":      latest.get("product_benefits"),
+            "target_audience":       latest.get("target_audience"),
+            "published_questions":   latest.get("published_questions"),
+            "customer_scenario":     latest.get("customer_scenario"),
+            "task_published":        latest.get("is_published", False),
+            "questions_by_category": combined_by_category,
         }
         for key, val in mapping.items():
             if key not in st.session_state and val is not None and val != [] and val != "":
@@ -93,6 +106,32 @@ def get_or_create_company(name: str = "") -> str:
     except Exception as e:
         print(f"[Supabase警告] get_or_create_company 失敗：{e}")
         return ""
+
+
+def get_all_training_sets(company_id: str) -> list:
+    """取得公司所有已發布的訓練集，供主管管理 PDF 列表使用"""
+    try:
+        sb = get_supabase()
+        result = sb.table("training_sets").select(
+            "id, filename, questions_by_category, created_at"
+        ).eq("company_id", company_id).eq(
+            "is_published", True
+        ).order("created_at", desc=False).execute()
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"[Supabase警告] get_all_training_sets 失敗：{e}")
+        return []
+
+
+def delete_training_set(training_set_id: str) -> bool:
+    """刪除指定的訓練集（單份 PDF）"""
+    try:
+        sb = get_supabase()
+        sb.table("training_sets").delete().eq("id", training_set_id).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase警告] delete_training_set 失敗：{e}")
+        return False
 
 
 def save_settings() -> None:
