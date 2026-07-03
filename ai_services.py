@@ -197,6 +197,7 @@ def get_coach_hint(
 
     response = client.messages.create(
         model="claude-sonnet-5",
+        thinking={"type": "disabled"},
         max_tokens=300,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}]
@@ -307,6 +308,7 @@ improvement_tips 填寫規則：
 
     response = client.messages.create(
         model="claude-sonnet-5",
+        thinking={"type": "disabled"},
         max_tokens=1500,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}]
@@ -380,6 +382,7 @@ def analyze_with_claude(document_text: str) -> str:
 
     response = client.messages.create(
         model="claude-sonnet-5",
+        thinking={"type": "disabled"},
         max_tokens=2048,
         system=system_prompt,
         messages=[{"role": "user", "content": f"以下是教材內容：\n\n{document_text}"}]
@@ -474,6 +477,7 @@ cat_5_decision（決策障礙類）：
 
     response = client.messages.create(
         model="claude-sonnet-5",
+        thinking={"type": "disabled"},
         max_tokens=4096,
         system=system_prompt,
         messages=[{"role": "user", "content": f"以下是教材內容：\n\n{document_text}"}]
@@ -751,6 +755,7 @@ def get_customer_response(
 
     response = client.messages.create(
         model="claude-sonnet-5",
+        thinking={"type": "disabled"},
         max_tokens=max_tokens_val,
         system=system,
         messages=chat_history
