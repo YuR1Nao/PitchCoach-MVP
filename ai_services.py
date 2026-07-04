@@ -149,12 +149,12 @@ def get_coach_hint(
     """
     client = anthropic.Anthropic(api_key=API_KEY)
 
-    # 告訴教練目前面臨的是哪一道考題
+    # 告訴教練目前面臨的是哪一道考題（僅作參考，不強制教練依此判斷）
     if current_q_idx < len(published_questions):
         q_title   = published_questions[current_q_idx].split("\n")[0]
-        q_context = f"客戶目前的核心疑慮（第 {current_q_idx + 1} 題）：{q_title}"
+        q_context = f"系統排定的下一道疑慮（僅供參考）：{q_title}"
     else:
-        q_context = "所有疑慮都已涵蓋，正進入最終購買決策階段。"
+        q_context = "系統顯示所有疑慮都已涵蓋（僅供參考）。"
 
     # 只取最近 6 則對話，聚焦在當前局勢
     recent_turns  = chat_history[-6:]
@@ -169,8 +169,12 @@ def get_coach_hint(
 
     system_prompt = f"""你是一位王牌銷售總監，正在即時指導一位業務員。
 
-【當前考題】
-客戶的核心疑慮是：{q_context}
+【最優先原則】
+你必須根據「對話記錄」裡客戶最後一句話實際在問什麼、擔心什麼來給建議，
+不要根據下方的系統排定題目來判斷，因為系統題號可能已經推進到下一題，
+但客戶剛才那句話可能還在講前一個疑慮。永遠以客戶最後一句話的真實內容為準。
+
+{q_context}
 
 【產品真實賣點】
 {benefits_block}
@@ -178,7 +182,8 @@ def get_coach_hint(
 【目標客群】
 {audience_block}
 
-你的任務：根據業務員剛才的回答，給出「下一句話應該怎麼說」的具體方向。
+你的任務：仔細閱讀對話記錄中客戶最後一句話，抓出他真正在問的具體問題，
+針對「那個具體問題」給出「下一句話應該怎麼說」的方向。
 
 強制規則：
 - 你的提示必須直接針對「當前考題」，不能給無關的建議
