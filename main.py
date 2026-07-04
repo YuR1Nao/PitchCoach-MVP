@@ -1655,56 +1655,43 @@ with tab3:
 
                 # ── 頂部核心指標 ──────────────────────────────
                 st.markdown("### 🏅 核心指標")
-                col_score, col_bonus, col_level, col_closing = st.columns(4)
 
-                with col_score:
-                    delta_label = "🔥 高表現" if score >= 80 else ("📈 需加強" if score >= 60 else "⚠️ 需培訓")
-                    st.metric(
-                        label="📊 綜合戰力分數",
-                        value=f"{score} 分",
-                        delta=delta_label,
-                        delta_color="normal" if score >= 80 else "inverse"
-                    )
+                _current_mode = st.session_state.get("training_mode", "speed")
 
-                with col_bonus:
-                    if bonus:
-                        st.success("🏅 獎金分潤門檻\n\n**✅ 已解鎖**（≥ 80 分）", icon="🎉")
-                    else:
-                        st.error(
-                            f"🏅 獎金分潤門檻\n\n**❌ 未達標**（差 {80 - score} 分）",
-                            icon="⚠️"
+                if _current_mode == "speed":
+                    # 急速模式：只顯示分數，不評成交與獎金
+                    col_score, col_note = st.columns([1, 2])
+                    with col_score:
+                        delta_label = "🔥 高表現" if score >= 80 else ("📈 需加強" if score >= 60 else "⚠️ 需培訓")
+                        st.metric(
+                            label="📊 綜合戰力分數",
+                            value=f"{score} 分",
+                            delta=delta_label,
+                            delta_color="normal" if score >= 80 else "inverse"
                         )
-
-                with col_level:
-                    if score >= 90:
-                        level_text, level_color = "🥇 頂尖業務", "#ffd700"
-                    elif score >= 80:
-                        level_text, level_color = "🥈 優質業務", "#c0c0c0"
-                    elif score >= 70:
-                        level_text, level_color = "🥉 發展中業務", "#cd7f32"
-                    elif score >= 60:
-                        level_text, level_color = "📋 需要輔導", "#6c757d"
-                    else:
-                        level_text, level_color = "🔴 強制培訓", "#dc3545"
-                    st.markdown(
-                        f'<div style="background:rgba(255,255,255,0.05);border-radius:12px;'
-                        f'padding:1.1rem 1rem;text-align:center;border:1px solid {level_color}40;">'
-                        f'<div style="font-size:0.8rem;color:#adb5bd;margin-bottom:0.3rem;">業務等級</div>'
-                        f'<div style="font-size:1.15rem;font-weight:700;color:{level_color};">{level_text}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-
-                with col_closing:
-                    closing_icon = (
-                        "✅" if closing_result == "當場成交"
-                        else "⏳" if closing_result == "有條件延遲"
-                        else "❌"
-                    )
-                    st.metric(
-                        label="🤝 本次成交結果",
-                        value=f"{closing_icon} {closing_result}"
-                    )
+                    with col_note:
+                        st.info("⚡ 急速模式僅評估左腦邏輯與右腦溝通，不評估成交結果。", icon="ℹ️")
+                else:
+                    # 深度模式：分數 + 成交結果
+                    col_score, col_closing = st.columns(2)
+                    with col_score:
+                        delta_label = "🔥 高表現" if score >= 80 else ("📈 需加強" if score >= 60 else "⚠️ 需培訓")
+                        st.metric(
+                            label="📊 綜合戰力分數",
+                            value=f"{score} 分",
+                            delta=delta_label,
+                            delta_color="normal" if score >= 80 else "inverse"
+                        )
+                    with col_closing:
+                        closing_icon = (
+                            "✅" if closing_result == "當場成交"
+                            else "⏳" if closing_result == "有條件延遲"
+                            else "❌"
+                        )
+                        st.metric(
+                            label="🤝 本次成交結果",
+                            value=f"{closing_icon} {closing_result}"
+                        )
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
