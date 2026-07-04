@@ -1095,6 +1095,7 @@ if tab2 is not None:
                                             "left_brain":     auto_report.get("left_brain", ""),
                                             "right_brain":    auto_report.get("right_brain", ""),
                                             "action_item":    auto_report.get("action_item", ""),
+                                            "closing_result": auto_report.get("closing_result", ""),
                                             "strength":       auto_report.get("strength", ""),
                                             "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
                                         }
@@ -1509,69 +1510,138 @@ with tab3:
 
                 st.markdown("---")
 
-                # ── 團隊指導建議 ──────────────────────────
+                # ── 團隊指導建議（急速/深度模式分開呈現）──────
                 st.markdown("### 🧭 團隊指導建議")
 
-                # 計算關鍵數據
-                closing_results = [s.get("closing_result", "") for s in scores_data]
-                close_count     = closing_results.count("當場成交")
-                delay_count     = closing_results.count("有條件延遲")
-                reject_count    = closing_results.count("拒絕成交")
-                close_rate      = (close_count / total_sessions * 100) if total_sessions > 0 else 0
+                # 判斷每筆記錄屬於哪個模式：優先讀取明確欄位 training_mode，
+                # 若無此欄位（舊資料）則以 closing_result 反推，確保向下相容
+                def _infer_mode(s):
+                    if s.get("training_mode"):
+                        return s["training_mode"]
+                    return "deep" if s.get("closing_result", "") in ("當場成交", "有條件延遲", "拒絕成交") else "speed"
 
-                low_score_count  = sum(1 for s in scores_data if s.get("score", 0) < 60)
-                high_score_count = sum(1 for s in scores_data if s.get("score", 0) >= 80)
+                speed_records = [s for s in scores_data if _infer_mode(s) == "speed"]
+                deep_records  = [s for s in scores_data if _infer_mode(s) == "deep"]
 
-                # 顯示關鍵指標
-                col_c1, col_c2, col_c3 = st.columns(3)
-                with col_c1:
-                    st.metric("✅ 當場成交率", f"{close_rate:.0f}%")
-                with col_c2:
-                    st.metric("⏳ 延遲決策次數", f"{delay_count} 次")
-                with col_c3:
-                    st.metric("❌ 拒絕成交次數", f"{reject_count} 次")
+                speed_count = len(speed_records)
+                deep_count  = len(deep_records)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                speed_avg = (sum(s.get("score", 0) for s in speed_records) / speed_count) if speed_count else 0
+                deep_avg  = (sum(s.get("score", 0) for s in deep_records) / deep_count) if deep_count else 0
 
-                # 根據數據產生具體指導建議
-                suggestions = []
+                speed_pass_count = sum(1 for s in speed_records if s.get("score", 0) >= 70)
+                speed_pass_rate  = (speed_pass_count / speed_count * 100) if speed_count else 0
 
-                if avg_score < 60:
-                    suggestions.append(("🔴 立即行動",
-                        "整體分數偏低，建議本週安排基礎銷售技巧培訓，重點訓練產品知識表達與開場白設計。"))
-                elif avg_score < 70:
-                    suggestions.append(("🟡 近期行動",
-                        "整體表現尚可但未達標，建議安排異議處理專項訓練，加強回應客戶常見疑慮的話術。"))
+                close_count  = sum(1 for s in deep_records if s.get("closing_result") == "當場成交")
+                delay_count  = sum(1 for s in deep_records if s.get("closing_result") == "有條件延遲")
+                reject_count = sum(1 for s in deep_records if s.get("closing_result") == "拒絕成交")
+                close_rate   = (close_count / deep_count * 100) if deep_count else 0
+
+                # ── ⚡ 急速模式總結區塊 ────────────────────
+                st.markdown(
+                    '<div style="background:rgba(0,123,255,0.05);border:1px solid rgba(0,123,255,0.25);'
+                    'border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+                    '<div style="font-size:1rem;font-weight:700;color:#4dabf7;margin-bottom:0.8rem;">'
+                    '⚡ 急速模式總結</div>',
+                    unsafe_allow_html=True
+                )
+
+                if speed_count == 0:
+                    st.info("ℹ️ 尚無「急速模式」訓練記錄。")
                 else:
-                    suggestions.append(("🟢 維持精進",
-                        "整體表現良好，建議安排進階情境演練，針對高難度客戶類型（如強烈比價型）進行專項訓練。"))
+                    col_s1, col_s2 = st.columns(2)
+                    with col_s1:
+                        st.metric("話術達標率", f"{speed_pass_rate:.0f}%", help="評分 ≥70 分視為話術達標")
+                    with col_s2:
+                        st.metric("平均分數", f"{speed_avg:.1f} 分")
 
-                if close_rate < 30:
-                    suggestions.append(("🔴 成交能力",
-                        f"當場成交率僅 {close_rate:.0f}%，建議重點加強促成技巧與現場引導決策的話術，"
-                        f"可安排角色扮演練習「如何在客戶猶豫時推進成交」。"))
-                elif delay_count > total_sessions * 0.5:
-                    suggestions.append(("🟡 促成技巧",
-                        "超過一半的演練結果為「有條件延遲」，客戶傾向不當場決定。"
-                        "建議加強緊迫感製造與即時解除疑慮的能力。"))
+                    if speed_avg < 60:
+                        _s_title, _s_content = "🔴 立即行動", "急速模式整體分數偏低，建議本週安排基礎銷售技巧培訓，重點訓練產品知識表達與開場白設計。"
+                    elif speed_avg < 70:
+                        _s_title, _s_content = "🟡 近期行動", "急速模式表現尚可但未達標，建議安排異議處理專項訓練，加強回應客戶常見疑慮的話術。"
+                    else:
+                        _s_title, _s_content = "🟢 維持精進", "急速模式表現良好，建議安排進階情境演練，針對高難度客戶類型進行專項訓練。"
 
-                if low_score_count > 0:
-                    low_names = [
-                        s.get("employee_name", "匿名員工")
-                        for s in scores_data if s.get("score", 0) < 60
-                    ]
-                    unique_low = list(dict.fromkeys(low_names))[:3]
-                    suggestions.append(("🔴 個別輔導",
-                        f"以下成員有低於 60 分的訓練記錄，建議安排一對一輔導：{', '.join(unique_low)}"))
-
-                for title, content in suggestions:
-                    color = "#dc3545" if "🔴" in title else ("#ffc107" if "🟡" in title else "#28a745")
+                    _color = "#dc3545" if "🔴" in _s_title else ("#ffc107" if "🟡" in _s_title else "#28a745")
                     st.markdown(
-                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {color};'
-                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-bottom:0.8rem;">'
-                        f'<div style="font-size:0.85rem;font-weight:700;color:{color};margin-bottom:0.4rem;">'
-                        f'{title}</div>'
-                        f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{content}</div>'
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {_color};'
+                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-top:0.6rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:{_color};margin-bottom:0.4rem;">{_s_title}</div>'
+                        f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{_s_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # ── 🎯 深度模式分析區塊 ────────────────────
+                st.markdown(
+                    '<div style="background:rgba(220,53,69,0.05);border:1px solid rgba(220,53,69,0.25);'
+                    'border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+                    '<div style="font-size:1rem;font-weight:700;color:#f783ac;margin-bottom:0.8rem;">'
+                    '🎯 深度模式分析</div>',
+                    unsafe_allow_html=True
+                )
+
+                if deep_count == 0:
+                    st.info("ℹ️ 目前尚無「深度模式」的訓練記錄，需要團隊完成深度模式訓練後才會顯示。")
+                else:
+                    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+                    with col_d1:
+                        st.metric("當場成交率", f"{close_rate:.0f}%")
+                    with col_d2:
+                        st.metric("延遲決策次數", f"{delay_count} 次")
+                    with col_d3:
+                        st.metric("拒絕成交次數", f"{reject_count} 次")
+                    with col_d4:
+                        st.metric("平均分數", f"{deep_avg:.1f} 分")
+
+                    if close_rate < 30:
+                        _d_title, _d_content = "🔴 成交能力", (
+                            f"當場成交率僅 {close_rate:.0f}%，建議重點加強促成技巧與現場引導決策的話術，"
+                            f"可安排角色扮演練習「如何在客戶猶豫時推進成交」。"
+                        )
+                    elif delay_count > deep_count * 0.5:
+                        _d_title, _d_content = "🟡 促成技巧", (
+                            "超過一半的演練結果為「有條件延遲」，客戶傾向不當場決定。"
+                            "建議加強緊迫感製造與即時解除疑慮的能力。"
+                        )
+                    else:
+                        _d_title, _d_content = "🟢 維持精進", "深度模式成交表現穩定，持續保持並可挑戰更高難度的客戶情境。"
+
+                    _color = "#dc3545" if "🔴" in _d_title else ("#ffc107" if "🟡" in _d_title else "#28a745")
+                    st.markdown(
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {_color};'
+                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-top:0.6rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:{_color};margin-bottom:0.4rem;">{_d_title}</div>'
+                        f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{_d_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # ── 個別輔導提醒（跨模式，明確標示模式來源）─────
+                st.markdown("<br>", unsafe_allow_html=True)
+                _low_flags, _seen = [], set()
+                for s in scores_data:
+                    if s.get("score", 0) < 60:
+                        name = s.get("employee_name", "匿名員工")
+                        if name in _seen:
+                            continue
+                        _seen.add(name)
+                        mode_label = "急速模式" if _infer_mode(s) == "speed" else "深度模式"
+                        _low_flags.append(f"{name}（{mode_label} {s.get('score', 0)} 分）")
+                        if len(_low_flags) >= 3:
+                            break
+
+                if _low_flags:
+                    st.markdown(
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #dc3545;'
+                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:#dc3545;margin-bottom:0.4rem;">🔴 個別輔導</div>'
+                        f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">'
+                        f'以下成員有低於 60 分的訓練記錄，建議安排一對一輔導：{"、".join(_low_flags)}</div>'
                         f'</div>',
                         unsafe_allow_html=True
                     )
