@@ -1040,7 +1040,10 @@ if tab2 is not None:
                         unsafe_allow_html=True
                     )
 
-                if st.button("📊 結束對話，查看報告", type="primary", key="end_session_btn"):
+                if st.session_state.get("is_completed") and st.session_state.get("evaluation_report"):
+                    # 報告已產生過，直接提示切換查看，不重新評分
+                    st.success("✅ 報告已產生，請切換到「模塊三：戰後報表台」查看完整分析。")
+                elif st.button("📊 結束對話，查看報告", type="primary", key="end_session_btn"):
                     with st.spinner("🤖 AI 正在分析你的表現，請稍候..."):
                         try:
                             # 只評分到 [TEST_COMPLETE] 為止，不包含通關後的額外對話
