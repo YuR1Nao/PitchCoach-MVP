@@ -1321,6 +1321,34 @@ with tab3:
                 cols = ["名次", "員工姓名", "最新分數", "80分以上次數", "訓練次數", "最後訓練日期"]
                 st.dataframe(df[cols], use_container_width=True, hide_index=True)
 
+                # ── 主管刪除員工測試資料 ──────────────────────
+                st.markdown("---")
+                with st.expander("🗑️ 刪除員工資料（清除測試帳號用）"):
+                    st.caption("⚠️ 此操作會永久刪除該員工所有訓練記錄，無法復原，僅建議用於清除測試資料。")
+                    _del_target = st.selectbox(
+                        "選擇要刪除的員工",
+                        options=["（請選擇）"] + [row["員工姓名"] for row in leaderboard],
+                        key="del_employee_select"
+                    )
+                    if _del_target != "（請選擇）":
+                        _confirm_del = st.checkbox(f"我確認要永久刪除「{_del_target}」的所有訓練記錄", key="confirm_del_employee")
+                        if st.button("🗑️ 確認刪除", type="primary", disabled=not _confirm_del):
+                            try:
+                                sb.table("scores").delete().eq(
+                                    "company_id", company_id
+                                ).eq(
+                                    "employee_name", _del_target
+                                ).execute()
+                                sb.table("sessions").delete().eq(
+                                    "company_id", company_id
+                                ).eq(
+                                    "employee_name", _del_target
+                                ).execute()
+                                st.success(f"✅ 已刪除「{_del_target}」的所有訓練記錄")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ 刪除失敗：{str(e)}")
+
                 st.markdown("<br>", unsafe_allow_html=True)
                 selected_employee = st.selectbox(
                     "👤 查看員工詳細訓練紀錄",
