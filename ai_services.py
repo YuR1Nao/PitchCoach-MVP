@@ -264,12 +264,23 @@ def get_evaluation_report(
 """
     )
 
-    system_prompt = """你是一位嚴格但客觀的企業銷售總監，正在為業務員做最終戰力評估。
+    _score_fields_block = (
+        '"left_brain_score": <左腦邏輯分數，整數 0~50，必須與 left_brain 文字評語互相對應>,\n'
+        '  "right_brain_score": <右腦溝通分數，整數 0~50，必須與 right_brain 文字評語互相對應>,\n'
+        '  "closing_score": 0,'
+        if training_mode == "speed" else
+        '"left_brain_score": <左腦邏輯分數，整數 0~35，必須與 left_brain 文字評語互相對應>,\n'
+        '  "right_brain_score": <右腦溝通分數，整數 0~35，必須與 right_brain 文字評語互相對應>,\n'
+        '  "closing_score": <成交能力分數，整數 0~30，必須與 closing_result 的結果互相對應>,'
+    )
+
+    system_prompt = f"""你是一位嚴格但客觀的企業銷售總監，正在為業務員做最終戰力評估。
 你必須分析業務員在剛才對話中的表現，並嚴格輸出以下 JSON 格式，不可包含任何其他文字：
 
-{
+{{
   "score": <整數 0~100>,
   "bonus_unlocked": <true 或 false，score >= 80 才是 true>,
+  {_score_fields_block}
   "left_brain": "<左腦邏輯分析：約 80 字。業務員是否精準命中產品賣點？有無漏掉關鍵資訊？>",
   "right_brain": "<右腦溝通分析：約 80 字。面對客戶情境，語氣是否具備同理心？是否太過生硬或照本宣科？>",
   "action_item": "<給主管的一句話培訓建議，例如：建議安排同理心溝通訓練，強化用故事代替數據的能力。>",
@@ -280,7 +291,7 @@ def get_evaluation_report(
     "<第二個具體改善建議>",
     "<第三個具體改善建議>"
   ]
-}
+}}
 
 評分維度（共 100 分）：
 """ + _scoring_block + """
@@ -288,6 +299,10 @@ closing_result 填寫規則：
 - 「當場成交」：客戶明確表示要購買或給出具體購買條件
 - 「有條件延遲」：客戶有興趣但要求優惠/試用/再想想
 - 「明確拒絕」：客戶禮貌但清楚地拒絕
+
+left_brain_score / right_brain_score / closing_score 填寫規則：
+- 這三個數字必須是你打出 left_brain、right_brain、closing_result 文字評語時實際依據的分數，不可以事後隨便填一個跟文字評語矛盾的數字
+- 三個分數加總後應該非常接近（但不強制等於）最終的 score
 
 improvement_tips 填寫規則：
 - 必須針對這次對話的真實問題，不能給空洞建議
@@ -338,6 +353,9 @@ improvement_tips 填寫規則：
     return {
         "score": 0,
         "bonus_unlocked": False,
+        "left_brain_score": 0,
+        "right_brain_score": 0,
+        "closing_score": 0,
         "left_brain": "（AI 評分解析失敗，請重新產生報告）",
         "right_brain": "（AI 評分解析失敗，請重新產生報告）",
         "action_item": "請重新按下『產生報告』按鈕。",
