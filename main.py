@@ -1022,17 +1022,22 @@ if tab2 is not None:
                 if st.session_state.get("evaluation_report") and st.session_state.get("is_completed"):
                     _rpt     = st.session_state["evaluation_report"]
                     _score   = _rpt.get("score", 0)
-                    _bonus   = _rpt.get("bonus_unlocked", False)
-                    _closing = _rpt.get("closing_result", "")
+                    _mode    = st.session_state.get("training_mode", "speed")
                     _color   = "#28a745" if _score >= 80 else ("#ffc107" if _score >= 60 else "#dc3545")
+
+                    if _mode == "speed":
+                        _sub_line = "急速模式：僅評估話術能力，不評估成交"
+                    else:
+                        _bonus    = _rpt.get("bonus_unlocked", False)
+                        _closing  = _rpt.get("closing_result", "")
+                        _sub_line = f'{"🏅 獎金門檻達標！" if _bonus else "未達獎金門檻"} ・ {_closing}'
+
                     st.markdown(
                         f'<div style="background:rgba(255,255,255,0.05);border:2px solid {_color};'
                         f'border-radius:12px;padding:1.2rem;text-align:center;margin:1rem 0;">'
                         f'<div style="font-size:0.85rem;color:#adb5bd;margin-bottom:0.3rem;">你的成績</div>'
                         f'<div style="font-size:2.5rem;font-weight:800;color:{_color};">{_score} 分</div>'
-                        f'<div style="font-size:0.9rem;margin-top:0.3rem;">'
-                        f'{"🏅 獎金門檻達標！" if _bonus else "未達獎金門檻"} ・ {_closing}'
-                        f'</div>'
+                        f'<div style="font-size:0.9rem;margin-top:0.3rem;">{_sub_line}</div>'
                         f'<div style="font-size:0.8rem;color:#adb5bd;margin-top:0.5rem;">'
                         f'完整分析請切換到「模塊三：戰後報表台」'
                         f'</div>'
@@ -1368,84 +1373,86 @@ with tab3:
                         if s.get("employee_name") == selected_employee
                     ]
 
+                    def _parse_tips(raw_tips):
+                        """improvement_tips 存進 Supabase 時是 json.dumps 過的字串，
+                        這裡統一還原成 list，避免對字串做逐字元迴圈。"""
+                        if isinstance(raw_tips, list):
+                            return raw_tips
+                        if isinstance(raw_tips, str) and raw_tips.strip():
+                            try:
+                                parsed = json.loads(raw_tips)
+                                return parsed if isinstance(parsed, list) else []
+                            except (json.JSONDecodeError, ValueError):
+                                return []
+                        return []
+
                     if emp_records:
-                        latest = emp_records[0]
-                        st.markdown(f"### 📋 {selected_employee} 的最近一次訓練")
+                        st.markdown(f"### 📋 {selected_employee} 的訓練紀錄（共 {len(emp_records)} 次）")
 
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            score_v = latest.get("score", 0)
-                            color = "#28a745" if score_v >= 80 else ("#ffc107" if score_v >= 60 else "#dc3545")
-                            st.markdown(
-                                f'<div style="background:rgba(255,255,255,0.05);border-radius:12px;'
-                                f'padding:1.2rem;text-align:center;">'
-                                f'<div style="font-size:0.85rem;color:#adb5bd;">綜合分數</div>'
-                                f'<div style="font-size:2.5rem;font-weight:700;color:{color};">{score_v}</div>'
-                                f'<div style="font-size:0.85rem;color:#adb5bd;">{latest.get("closing_result","")}</div>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
-                        with col_b:
-                            strength = latest.get("strength", "")
-                            if strength:
-                                st.markdown(
-                                    f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
-                                    f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                    f'<div style="font-size:0.8rem;color:#28a745;font-weight:700;">✨ 本次亮點</div>'
-                                    f'<div style="font-size:0.9rem;color:#e9ecef;margin-top:0.3rem;">{strength}</div>'
-                                    f'</div>',
-                                    unsafe_allow_html=True
-                                )
+                        for idx, rec in enumerate(emp_records):
+                            rec_score = rec.get("score", 0)
+                            rec_color = "#28a745" if rec_score >= 80 else ("#ffc107" if rec_score >= 60 else "#dc3545")
+                            rec_date  = rec.get("created_at", "")[:16].replace("T", " ")
+                            header_label = f"{'📌 最近一次' if idx == 0 else '📅 ' + rec_date} ・ {rec_score} 分"
 
-                        tips = latest.get("improvement_tips", [])
-                        if tips:
-                            st.markdown("**🎯 改善建議**")
-                            for i, tip in enumerate(tips, 1):
-                                st.markdown(
-                                    f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
-                                    f'border-radius:0 12px 12px 0;padding:0.8rem 1.2rem;margin-bottom:0.5rem;">'
-                                    f'<span style="font-size:0.8rem;color:#ffc107;">改善點 {i}</span><br>'
-                                    f'<span style="font-size:0.9rem;color:#e9ecef;">{tip}</span>'
-                                    f'</div>',
-                                    unsafe_allow_html=True
-                                )
+                            with st.expander(header_label, expanded=(idx == 0)):
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.markdown(
+                                        f'<div style="background:rgba(255,255,255,0.05);border-radius:12px;'
+                                        f'padding:1.2rem;text-align:center;">'
+                                        f'<div style="font-size:0.85rem;color:#adb5bd;">綜合分數</div>'
+                                        f'<div style="font-size:2.5rem;font-weight:700;color:{rec_color};">{rec_score}</div>'
+                                        f'<div style="font-size:0.85rem;color:#adb5bd;">{rec.get("closing_result","")}</div>'
+                                        f'</div>',
+                                        unsafe_allow_html=True
+                                    )
+                                with col_b:
+                                    strength = rec.get("strength", "")
+                                    if strength:
+                                        st.markdown(
+                                            f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
+                                            f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                            f'<div style="font-size:0.8rem;color:#28a745;font-weight:700;">✨ 本次表現亮點</div>'
+                                            f'<div style="font-size:0.9rem;color:#e9ecef;margin-top:0.3rem;">{strength}</div>'
+                                            f'</div>',
+                                            unsafe_allow_html=True
+                                        )
 
-                        col_lb, col_rb = st.columns(2)
-                        with col_lb:
-                            st.markdown(
-                                f'<div style="background:rgba(0,123,255,0.08);border-left:4px solid #007bff;'
-                                f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                f'<div style="font-size:0.8rem;color:#4dabf7;font-weight:700;">🔵 左腦分析</div>'
-                                f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
-                                f'{latest.get("left_brain","—")}</div></div>',
-                                unsafe_allow_html=True
-                            )
-                        with col_rb:
-                            st.markdown(
-                                f'<div style="background:rgba(220,53,69,0.08);border-left:4px solid #e05c6e;'
-                                f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                f'<div style="font-size:0.8rem;color:#f783ac;font-weight:700;">🔴 右腦分析</div>'
-                                f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
-                                f'{latest.get("right_brain","—")}</div></div>',
-                                unsafe_allow_html=True
-                            )
+                                tips = _parse_tips(rec.get("improvement_tips", []))
+                                if tips:
+                                    st.markdown("**🎯 下次練習重點**")
+                                    for i, tip in enumerate(tips, 1):
+                                        st.markdown(
+                                            f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
+                                            f'border-radius:0 12px 12px 0;padding:0.8rem 1.2rem;margin-bottom:0.5rem;">'
+                                            f'<span style="font-size:0.8rem;color:#ffc107;">改善點 {i}</span><br>'
+                                            f'<span style="font-size:0.9rem;color:#e9ecef;">{tip}</span>'
+                                            f'</div>',
+                                            unsafe_allow_html=True
+                                        )
 
-                        st.markdown(f"**💡 培訓建議：** {latest.get('action_item','—')}")
+                                col_lb, col_rb = st.columns(2)
+                                with col_lb:
+                                    st.markdown(
+                                        f'<div style="background:rgba(0,123,255,0.08);border-left:4px solid #007bff;'
+                                        f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                        f'<div style="font-size:0.8rem;color:#4dabf7;font-weight:700;">🔵 左腦分析</div>'
+                                        f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
+                                        f'{rec.get("left_brain","—")}</div></div>',
+                                        unsafe_allow_html=True
+                                    )
+                                with col_rb:
+                                    st.markdown(
+                                        f'<div style="background:rgba(220,53,69,0.08);border-left:4px solid #e05c6e;'
+                                        f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
+                                        f'<div style="font-size:0.8rem;color:#f783ac;font-weight:700;">🔴 右腦分析</div>'
+                                        f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
+                                        f'{rec.get("right_brain","—")}</div></div>',
+                                        unsafe_allow_html=True
+                                    )
 
-                        if len(emp_records) > 1:
-                            st.markdown("**📅 歷史訓練記錄**")
-                            for rec in emp_records[1:6]:
-                                rec_score = rec.get("score", 0)
-                                rec_color = "#28a745" if rec_score >= 80 else ("#ffc107" if rec_score >= 60 else "#dc3545")
-                                rec_date = rec.get("created_at", "")[:10]
-                                st.markdown(
-                                    f'<div style="background:rgba(255,255,255,0.03);border-left:3px solid {rec_color};'
-                                    f'border-radius:0 8px 8px 0;padding:0.5rem 1rem;margin-bottom:0.4rem;">'
-                                    f'{rec_date}　<span style="color:{rec_color};font-weight:700;">{rec_score} 分</span>'
-                                    f'　{rec.get("closing_result","")}'
-                                    f'</div>',
-                                    unsafe_allow_html=True
-                                )
+                                st.markdown(f"**💡 培訓建議：** {rec.get('action_item','—')}")
 
                 st.markdown("---")
                 st.markdown("### 🚨 需要主管關注")
@@ -1540,6 +1547,18 @@ with tab3:
                 reject_count = sum(1 for s in deep_records if s.get("closing_result") == "拒絕成交")
                 close_rate   = (close_count / deep_count * 100) if deep_count else 0
 
+                speed_left_avg  = (sum(s.get("left_brain_score", 0)  for s in speed_records) / speed_count) if speed_count else 0
+                speed_right_avg = (sum(s.get("right_brain_score", 0) for s in speed_records) / speed_count) if speed_count else 0
+
+                deep_left_avg    = (sum(s.get("left_brain_score", 0)  for s in deep_records) / deep_count) if deep_count else 0
+                deep_right_avg   = (sum(s.get("right_brain_score", 0) for s in deep_records) / deep_count) if deep_count else 0
+                deep_closing_avg = (sum(s.get("closing_score", 0)     for s in deep_records) / deep_count) if deep_count else 0
+
+                # 三個維度滿分不同（左腦35/右腦35/成交30），換算成百分比才能公平比較誰偏弱
+                deep_left_pct    = (deep_left_avg    / 35 * 100) if deep_count else 0
+                deep_right_pct   = (deep_right_avg   / 35 * 100) if deep_count else 0
+                deep_closing_pct = (deep_closing_avg / 30 * 100) if deep_count else 0
+
                 # ── ⚡ 急速模式總結區塊 ────────────────────
                 st.markdown(
                     '<div style="background:rgba(0,123,255,0.05);border:1px solid rgba(0,123,255,0.25);'
@@ -1558,12 +1577,24 @@ with tab3:
                     with col_s2:
                         st.metric("平均分數", f"{speed_avg:.1f} 分")
 
+                    _speed_gap = speed_right_avg - speed_left_avg  # 正值代表右腦較弱，負值代表左腦較弱
+
                     if speed_avg < 60:
                         _s_title, _s_content = "🔴 立即行動", "急速模式整體分數偏低，建議本週安排基礎銷售技巧培訓，重點訓練產品知識表達與開場白設計。"
+                    elif _speed_gap <= -5:
+                        _s_title, _s_content = "🟡 近期行動", (
+                            f"團隊左腦邏輯（平均 {speed_left_avg:.0f}/50）明顯弱於右腦溝通"
+                            f"（平均 {speed_right_avg:.0f}/50），建議加強產品知識背誦與賣點覆蓋率訓練。"
+                        )
+                    elif _speed_gap >= 5:
+                        _s_title, _s_content = "🟡 近期行動", (
+                            f"團隊右腦溝通（平均 {speed_right_avg:.0f}/50）明顯弱於左腦邏輯"
+                            f"（平均 {speed_left_avg:.0f}/50），建議加強同理心表達與語氣訓練。"
+                        )
                     elif speed_avg < 70:
-                        _s_title, _s_content = "🟡 近期行動", "急速模式表現尚可但未達標，建議安排異議處理專項訓練，加強回應客戶常見疑慮的話術。"
+                        _s_title, _s_content = "🟡 近期行動", "急速模式表現尚可但未達標，左右腦能力發展平均，建議安排異議處理專項訓練，加強回應客戶常見疑慮的話術。"
                     else:
-                        _s_title, _s_content = "🟢 維持精進", "急速模式表現良好，建議安排進階情境演練，針對高難度客戶類型進行專項訓練。"
+                        _s_title, _s_content = "🟢 維持精進", "急速模式表現良好，左右腦能力發展平均，建議安排進階情境演練，針對高難度客戶類型進行專項訓練。"
 
                     _color = "#dc3545" if "🔴" in _s_title else ("#ffc107" if "🟡" in _s_title else "#28a745")
                     st.markdown(
@@ -1599,10 +1630,25 @@ with tab3:
                     with col_d4:
                         st.metric("平均分數", f"{deep_avg:.1f} 分")
 
+                    _deep_dims   = {"左腦邏輯": deep_left_pct, "右腦溝通": deep_right_pct, "成交能力": deep_closing_pct}
+                    _weakest     = min(_deep_dims, key=_deep_dims.get)
+                    _weakest_v   = _deep_dims[_weakest]
+                    _strongest_v = max(_deep_dims.values())
+                    _dim_advice  = {
+                        "左腦邏輯": "產品知識背誦與賣點覆蓋率",
+                        "右腦溝通": "同理心表達與語氣訓練",
+                        "成交能力": "識別購買信號、主動創造成交條件的技巧",
+                    }
+
                     if close_rate < 30:
                         _d_title, _d_content = "🔴 成交能力", (
                             f"當場成交率僅 {close_rate:.0f}%，建議重點加強促成技巧與現場引導決策的話術，"
                             f"可安排角色扮演練習「如何在客戶猶豫時推進成交」。"
+                        )
+                    elif _strongest_v - _weakest_v >= 10:
+                        _d_title, _d_content = "🟡 促成技巧", (
+                            f"團隊在「{_weakest}」這個維度相對偏弱（換算約 {_weakest_v:.0f}%，"
+                            f"其他維度約 {_strongest_v:.0f}%），建議優先加強{_dim_advice[_weakest]}。"
                         )
                     elif delay_count > deep_count * 0.5:
                         _d_title, _d_content = "🟡 促成技巧", (
@@ -1610,7 +1656,7 @@ with tab3:
                             "建議加強緊迫感製造與即時解除疑慮的能力。"
                         )
                     else:
-                        _d_title, _d_content = "🟢 維持精進", "深度模式成交表現穩定，持續保持並可挑戰更高難度的客戶情境。"
+                        _d_title, _d_content = "🟢 維持精進", "深度模式成交表現穩定，三大維度發展平均，持續保持並可挑戰更高難度的客戶情境。"
 
                     _color = "#dc3545" if "🔴" in _d_title else ("#ffc107" if "🟡" in _d_title else "#28a745")
                     st.markdown(
