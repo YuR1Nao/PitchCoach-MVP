@@ -1028,9 +1028,8 @@ if tab2 is not None:
                     if _mode == "speed":
                         _sub_line = "急速模式：僅評估話術能力，不評估成交"
                     else:
-                        _bonus    = _rpt.get("bonus_unlocked", False)
                         _closing  = _rpt.get("closing_result", "")
-                        _sub_line = f'{"🏅 獎金門檻達標！" if _bonus else "未達獎金門檻"} ・ {_closing}'
+                        _sub_line = f"🤝 本次成交結果：{_closing}"
 
                     st.markdown(
                         f'<div style="background:rgba(255,255,255,0.05);border:2px solid {_color};'
@@ -1704,13 +1703,12 @@ with tab3:
                     score_v  = s.get("score", 0)
                     name     = s.get("employee_name", "匿名員工")
                     date_str = s.get("created_at", "")[:16].replace("T", " ")
-                    bonus_ic = "🏅" if s.get("bonus_unlocked") else ""
                     closing  = s.get("closing_result", "")
                     color    = "#28a745" if score_v >= 80 else ("#ffc107" if score_v >= 60 else "#dc3545")
                     st.markdown(
                         f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {color};'
                         f'border-radius:0 8px 8px 0;padding:0.6rem 1rem;margin-bottom:0.5rem;">'
-                        f'<span style="font-weight:700;">{name}</span> {bonus_ic}'
+                        f'<span style="font-weight:700;">{name}</span>'
                         f'<span style="float:right;color:{color};font-weight:700;">{score_v} 分</span><br>'
                         f'<span style="font-size:0.82rem;color:#adb5bd;">{date_str}</span>'
                         f'{f" ・ {closing}" if closing else ""}'
