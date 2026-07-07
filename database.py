@@ -213,6 +213,7 @@ def set_company_credentials(company_id: str, access_code: str, admin_password_ha
         }).eq("id", company_id).execute()
         return True
     except Exception as e:
+        st.error(f"⚠️ 設定公司帳密失敗：{str(e)}")
         print(f"[Supabase警告] set_company_credentials 失敗：{e}")
         return False
 
@@ -229,6 +230,7 @@ def create_employee_account(company_id: str, employee_name: str, username: str, 
         }).execute()
         return True
     except Exception as e:
+        st.error(f"⚠️ 建立員工帳號失敗：{str(e)}")
         print(f"[Supabase警告] create_employee_account 失敗：{e}")
         return False
 
