@@ -182,3 +182,81 @@ def save_settings() -> None:
             print("[Supabase] training_sets 儲存成功")
     except Exception as e:
         st.warning(f"⚠️ Supabase 儲存失敗：{str(e)}，設定已存入本機 JSON")
+
+
+def get_company_by_access_code(access_code: str):
+    """依 access_code 查詢公司，回傳 dict 或 None"""
+    try:
+        sb = get_supabase()
+        result = sb.table("companies").select(
+            "id, name, access_code, admin_password_hash"
+        ).eq("access_code", access_code).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"[Supabase警告] get_company_by_access_code 失敗：{e}")
+        return None
+
+
+def get_employee_by_username(username: str):
+    """依 username 查詢員工帳號，回傳 dict（含 company_id、employee_name）或 None"""
+    try:
+        sb = get_supabase()
+        result = sb.table("employees").select(
+            "id, company_id, employee_name, username, password_hash"
+        ).eq("username", username).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"[Supabase警告] get_employee_by_username 失敗：{e}")
+        return None
+
+
+def get_company_name_by_id(company_id: str) -> str:
+    """依 company_id 查詢公司名稱"""
+    try:
+        sb = get_supabase()
+        result = sb.table("companies").select("name").eq("id", company_id).execute()
+        return result.data[0]["name"] if result.data else ""
+    except Exception as e:
+        print(f"[Supabase警告] get_company_name_by_id 失敗：{e}")
+        return ""
+
+
+def set_company_credentials(company_id: str, access_code: str, admin_password_hash: str) -> bool:
+    """設定（或覆寫）指定公司的登入代號與管理員密碼"""
+    try:
+        sb = get_supabase()
+        sb.table("companies").update({
+            "access_code": access_code,
+            "admin_password_hash": admin_password_hash
+        }).eq("id", company_id).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase警告] set_company_credentials 失敗：{e}")
+        return False
+
+
+def create_employee_account(company_id: str, employee_name: str, username: str, password_hash: str) -> bool:
+    """新增一位員工的登入帳號"""
+    try:
+        sb = get_supabase()
+        sb.table("employees").insert({
+            "company_id":    company_id,
+            "employee_name": employee_name,
+            "username":      username,
+            "password_hash": password_hash,
+        }).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase警告] create_employee_account 失敗：{e}")
+        return False
+
+
+def list_all_companies() -> list:
+    """列出所有公司，供平台管理頁面下拉選單使用"""
+    try:
+        sb = get_supabase()
+        result = sb.table("companies").select("id, name, access_code").order("name").execute()
+        return result.data if result.data else []
+    except Exception as e:
+        print(f"[Supabase警告] list_all_companies 失敗：{e}")
+        return []
