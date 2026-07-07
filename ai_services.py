@@ -274,6 +274,19 @@ def get_evaluation_report(
         '  "closing_score": <成交能力分數，整數 0~30，必須與 closing_result 的結果互相對應>,'
     )
 
+    _closing_rule_block = (
+        """closing_result 填寫規則（急速模式）：
+- 急速模式不評估成交，closing_result 必須固定填寫「急速模式不評估成交」這個字串
+- 絕對不可以填寫「當場成交」「有條件延遲」「明確拒絕」這三個選項中的任何一個，
+  即使對話內容看起來像是在談合作意願、預算、導入時程等商業決策，也一律固定填
+  「急速模式不評估成交」，不要自己判斷要不要成交"""
+        if training_mode == "speed" else
+        """closing_result 填寫規則（深度模式）：
+- 「當場成交」：客戶明確表示要購買或給出具體購買條件
+- 「有條件延遲」：客戶有興趣但要求優惠/試用/再想想
+- 「明確拒絕」：客戶禮貌但清楚地拒絕"""
+    )
+
     system_prompt = f"""你是一位嚴格但客觀的企業銷售總監，正在為業務員做最終戰力評估。
 你必須分析業務員在剛才對話中的表現，並嚴格輸出以下 JSON 格式，不可包含任何其他文字：
 
@@ -294,11 +307,8 @@ def get_evaluation_report(
 }}
 
 評分維度（共 100 分）：
-""" + _scoring_block + """
-closing_result 填寫規則：
-- 「當場成交」：客戶明確表示要購買或給出具體購買條件
-- 「有條件延遲」：客戶有興趣但要求優惠/試用/再想想
-- 「明確拒絕」：客戶禮貌但清楚地拒絕
+""" + _scoring_block + f"""
+{_closing_rule_block}
 
 left_brain_score / right_brain_score / closing_score 填寫規則：
 - 這三個數字必須是你打出 left_brain、right_brain、closing_result 文字評語時實際依據的分數，不可以事後隨便填一個跟文字評語矛盾的數字
