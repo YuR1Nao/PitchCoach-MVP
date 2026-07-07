@@ -1463,6 +1463,27 @@ with tab3:
 
                 today = datetime.utcnow()
 
+                # 依員工分組完整紀錄（含左右腦分數與改善建議），供下滑警示使用
+                emp_full_records = defaultdict(list)
+                for s in scores_data:
+                    emp_full_records[s.get("employee_name", "匿名員工")].append(s)
+
+                def _rec_mode(s):
+                    if s.get("training_mode"):
+                        return s["training_mode"]
+                    return "deep" if s.get("closing_result", "") in ("當場成交", "有條件延遲", "拒絕成交") else "speed"
+
+                def _parse_tips_for_alert(raw_tips):
+                    if isinstance(raw_tips, list):
+                        return raw_tips
+                    if isinstance(raw_tips, str) and raw_tips.strip():
+                        try:
+                            parsed = json.loads(raw_tips)
+                            return parsed if isinstance(parsed, list) else []
+                        except (json.JSONDecodeError, ValueError):
+                            return []
+                    return []
+
                 for name, stats in employee_stats.items():
                     scores_list   = stats["scores"]
                     last_date_str = stats["last_training"]
@@ -1476,14 +1497,37 @@ with tab3:
                         except Exception:
                             pass
 
-                    # 最新分數低於個人平均（有超過 1 次訓練才比較）
+                    # 最新分數低於「先前」平均（排除最新這筆，避免被自己稀釋掉下滑幅度）
                     if len(scores_list) >= 2:
-                        personal_avg = sum(scores_list) / len(scores_list)
-                        latest_score = scores_list[0]  # scores_data 已按時間降序排列
-                        if latest_score < personal_avg - 5:
-                            alert_declining.append(
-                                f"{name}（最新 {latest_score} 分 vs 平均 {personal_avg:.0f} 分）"
-                            )
+                        latest_score    = scores_list[0]  # scores_data 已按時間降序排列
+                        previous_scores = scores_list[1:]
+                        previous_avg    = sum(previous_scores) / len(previous_scores)
+                        if latest_score < previous_avg - 5:
+                            latest_rec = emp_full_records[name][0]
+
+                            # 找同模式的先前紀錄，比較左右腦哪邊掉比較多（換算百分比才能公平比較）
+                            same_mode_prev = [
+                                r for r in emp_full_records[name][1:]
+                                if _rec_mode(r) == _rec_mode(latest_rec)
+                            ]
+                            dim_note = ""
+                            if same_mode_prev:
+                                _max   = 35 if _rec_mode(latest_rec) == "deep" else 50
+                                l_prev = sum(r.get("left_brain_score", 0)  for r in same_mode_prev) / len(same_mode_prev)
+                                r_prev = sum(r.get("right_brain_score", 0) for r in same_mode_prev) / len(same_mode_prev)
+                                l_drop = (l_prev - latest_rec.get("left_brain_score", 0))  / _max * 100
+                                r_drop = (r_prev - latest_rec.get("right_brain_score", 0)) / _max * 100
+                                if max(l_drop, r_drop) >= 10:
+                                    dim_note = "，左腦下滑較明顯" if l_drop > r_drop else "，右腦下滑較明顯"
+
+                            # 抓這次的第一條改善建議，讓主管一眼看到具體問題點
+                            tips = _parse_tips_for_alert(latest_rec.get("improvement_tips", []))
+                            issue_note = tips[0] if tips else ""
+
+                            alert_declining.append({
+                                "headline": f"{name}（最新 {latest_score} 分 vs 先前平均 {previous_avg:.0f} 分{dim_note}）",
+                                "issue": issue_note,
+                            })
 
                     # 持續低分
                     if len(scores_list) >= 2:
@@ -1504,7 +1548,9 @@ with tab3:
                     has_alert = True
                     st.warning("📉 **成績下滑中**（建議了解原因）")
                     for a in alert_declining:
-                        st.markdown(f"　・{a}")
+                        st.markdown(f"　・{a['headline']}")
+                        if a["issue"]:
+                            st.markdown(f"　　　└ 這次問題：{a['issue']}")
 
                 if alert_low_score:
                     has_alert = True
