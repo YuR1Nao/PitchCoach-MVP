@@ -1095,7 +1095,7 @@ if tab2 is not None:
                                             "company_id":     company_id,
                                             "employee_name":  employee_name,
                                             "score":          auto_report.get("score", 0),
-                                            "bonus_unlocked": auto_report.get("bonus_unlocked", False),
+                                            "training_mode":  st.session_state.get("training_mode", "speed"),
                                             "left_brain_score":  auto_report.get("left_brain_score", 0),
                                             "right_brain_score": auto_report.get("right_brain_score", 0),
                                             "closing_score":     auto_report.get("closing_score", 0),
@@ -1301,14 +1301,12 @@ with tab3:
                 st.markdown("### 🏆 員工成績排行榜")
 
                 employee_stats = defaultdict(lambda: {
-                    "scores": [], "bonus_count": 0, "last_training": ""
+                    "scores": [], "last_training": ""
                 })
                 for s in scores_data:
                     name  = s.get("employee_name", "匿名員工")
                     score = s.get("score", 0)
                     employee_stats[name]["scores"].append(score)
-                    if s.get("bonus_unlocked"):
-                        employee_stats[name]["bonus_count"] += 1
                     if s.get("created_at", "") > employee_stats[name]["last_training"]:
                         employee_stats[name]["last_training"] = s.get("created_at", "")[:10]
 
@@ -1762,7 +1760,6 @@ with tab3:
             # ── Dashboard 視覺呈現 ────────────────────────────
             if cached_report:
                 score          = cached_report.get("score", 0)
-                bonus          = cached_report.get("bonus_unlocked", False)
                 left_brain     = cached_report.get("left_brain", "—")
                 right_brain    = cached_report.get("right_brain", "—")
                 action_item    = cached_report.get("action_item", "—")

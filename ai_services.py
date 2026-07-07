@@ -292,7 +292,6 @@ def get_evaluation_report(
 
 {{
   "score": <整數 0~100>,
-  "bonus_unlocked": <true 或 false，score >= 80 才是 true>,
   {_score_fields_block}
   "left_brain": "<左腦邏輯分析：約 80 字。業務員是否精準命中產品賣點？有無漏掉關鍵資訊？>",
   "right_brain": "<右腦溝通分析：約 80 字。面對客戶情境，語氣是否具備同理心？是否太過生硬或照本宣科？>",
@@ -362,7 +361,6 @@ improvement_tips 填寫規則：
     # Fallback：讓 UI 顯示友善錯誤，不崩潰
     return {
         "score": 0,
-        "bonus_unlocked": False,
         "left_brain_score": 0,
         "right_brain_score": 0,
         "closing_score": 0,
