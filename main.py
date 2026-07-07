@@ -9,12 +9,17 @@ import re
 import json
 import random
 import os
+import bcrypt
+import secrets
+import string
 from dotenv import load_dotenv
 load_dotenv()
 
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
-                      get_all_training_sets, delete_training_set, toggle_training_set_active)
+                      get_all_training_sets, delete_training_set, toggle_training_set_active,
+                      get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
+                      set_company_credentials, create_employee_account, list_all_companies)
 from ai_services import (
     clean_text_for_tts, speech_to_text,
     get_coach_hint, get_evaluation_report, extract_text_from_bytes,
@@ -31,44 +36,98 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── 登入 Gate ──────────────────────────────────
+# ── 登入 Gate（依網址參數 ?view= 決定顯示哪個登入畫面）─────
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
     st.session_state["role"] = None
     st.session_state["current_company"] = ""
+    st.session_state["company_id"] = ""
 
 if not st.session_state["authenticated"]:
-    st.title("🎯 PitchCoach 登入")
-    role = st.radio("請選擇身份", ["🏢 主管（Admin）", "👤 員工（Employee）"])
-    company_input = st.text_input("公司名稱", placeholder="例如：智云健康股份有限公司")
+    _view = st.query_params.get("view", "")
 
-    if role == "🏢 主管（Admin）":
+    if _view == "manager":
+        st.title("🎯 PitchCoach 企業主管登入")
+        access_code_input = st.text_input("公司帳號")
         pwd = st.text_input("管理員密碼", type="password")
         if st.button("登入"):
-            _admin_pwd = st.secrets.get("ADMIN_PASSWORD", ADMIN_PASSWORD)
-            if pwd == _admin_pwd and company_input.strip():
+            company = get_company_by_access_code(access_code_input.strip())
+            if not company or not company.get("admin_password_hash"):
+                st.error("公司帳號不存在，請向系統管理者確認")
+            elif not bcrypt.checkpw(pwd.encode(), company["admin_password_hash"].encode()):
+                st.error("密碼錯誤")
+            else:
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "admin"
-                st.session_state["current_company"] = company_input.strip()
+                st.session_state["current_company"] = company["name"]
+                st.session_state["company_id"] = company["id"]
                 st.rerun()
-            else:
-                st.error("密碼錯誤或公司名稱為空")
-    else:
-        name_input   = st.text_input("您的姓名")
-        invite_input = st.text_input("員工邀請碼", type="password")
+
+    elif _view == "employee":
+        st.title("🎯 PitchCoach 員工訓練登入")
+        username_input = st.text_input("帳號")
+        pwd = st.text_input("密碼", type="password")
         if st.button("進入訓練"):
-            _invite_code = st.secrets.get("EMPLOYEE_CODE",
-                           os.environ.get("EMPLOYEE_CODE", "employee123"))
-            if not company_input.strip() or not name_input.strip():
-                st.error("請填寫公司名稱與姓名")
-            elif invite_input != _invite_code:
-                st.error("❌ 邀請碼錯誤，請向主管確認")
+            employee = get_employee_by_username(username_input.strip())
+            if not employee:
+                st.error("帳號不存在，請向主管確認")
+            elif not bcrypt.checkpw(pwd.encode(), employee["password_hash"].encode()):
+                st.error("密碼錯誤")
             else:
                 st.session_state["authenticated"] = True
                 st.session_state["role"] = "employee"
-                st.session_state["current_company"] = company_input.strip()
-                st.session_state["employee_name"] = name_input.strip()
+                st.session_state["company_id"] = employee["company_id"]
+                st.session_state["current_company"] = get_company_name_by_id(employee["company_id"])
+                st.session_state["employee_name"] = employee["employee_name"]
                 st.rerun()
+
+    elif _view == "platform":
+        st.title("🛠️ PitchCoach 平台管理")
+        st.caption("僅供系統管理者新增公司與員工帳號使用")
+        super_pwd = st.text_input("系統管理密碼", type="password")
+        if super_pwd and SUPER_ADMIN_PASSWORD and super_pwd == SUPER_ADMIN_PASSWORD:
+            st.success("✅ 已驗證，以下帳密只會顯示這一次，請立即記下並交給對方")
+
+            st.markdown("#### 🏢 設定 / 更新公司登入帳密")
+            existing = list_all_companies()
+            existing_names = [c["name"] for c in existing]
+            company_name_input = st.text_input("公司名稱（若已存在會沿用同一間，不會重複建立）")
+            if st.button("產生 / 重設此公司的管理員帳密"):
+                if company_name_input.strip():
+                    cid = get_or_create_company(company_name_input.strip())
+                    new_access_code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+                    new_password    = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
+                    pwd_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+                    if set_company_credentials(cid, new_access_code, pwd_hash):
+                        st.success(f"公司帳號：`{new_access_code}`　管理員密碼：`{new_password}`")
+                        st.warning("這組密碼只會顯示這一次，請立刻複製給對方。")
+                else:
+                    st.error("請輸入公司名稱")
+
+            st.markdown("#### 👤 新增員工帳號")
+            if existing:
+                target_company = st.selectbox("這位員工屬於哪間公司", existing_names)
+                emp_name_input  = st.text_input("員工姓名")
+                if st.button("產生此員工的帳密"):
+                    if emp_name_input.strip():
+                        cid = next(c["id"] for c in existing if c["name"] == target_company)
+                        new_username = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+                        new_password = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(10))
+                        pwd_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+                        if create_employee_account(cid, emp_name_input.strip(), new_username, pwd_hash):
+                            st.success(f"員工帳號：`{new_username}`　密碼：`{new_password}`")
+                            st.warning("這組密碼只會顯示這一次，請立刻複製給對方。")
+                    else:
+                        st.error("請輸入員工姓名")
+            else:
+                st.info("目前還沒有任何公司，請先在上面新增一間公司。")
+        elif super_pwd:
+            st.error("密碼錯誤")
+
+    else:
+        st.title("🎯 PitchCoach")
+        st.info("請使用您收到的登入連結進入系統。")
+
     st.stop()
 
 # 每個瀏覽器 Session 只執行一次：自動讀取上次儲存的主管設定
@@ -1071,7 +1130,7 @@ if tab2 is not None:
                             # 自動儲存到 Supabase
                             try:
                                 sb            = get_supabase()
-                                company_id    = get_or_create_company(st.session_state.get("current_company", ""))
+                                company_id    = st.session_state.get("company_id", "")
                                 employee_name = st.session_state.get("employee_name", "匿名員工")
 
                                 if not company_id:
@@ -1257,7 +1316,7 @@ with tab3:
             import pandas as pd
 
             sb = get_supabase()
-            company_id = get_or_create_company(st.session_state.get("current_company", ""))
+            company_id = st.session_state.get("company_id", "")
 
             all_scores = sb.table("scores").select("*").eq(
                 "company_id", company_id
