@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 from supabase import create_client, Client
-from config import (SUPABASE_URL, SUPABASE_KEY, SETTINGS_FILE, PERSIST_KEYS)
+from config import (SUPABASE_URL, SUPABASE_KEY)
 
 
 def get_supabase() -> Client:
@@ -13,24 +13,20 @@ def load_settings() -> None:
     """
     程式啟動時還原主管設定到 session_state。
 
-    優先順序：
-    1. Supabase training_sets（取 company 下最新一筆 is_published=True 的記錄）
-    2. 若 Supabase 失敗，fallback 到 company_settings.json
+    只查詢當前登入公司（依 session_state 的 company_id）自己的 Supabase 資料。
+    查無資料代表這是全新公司或尚未上傳教材，屬於正常狀態，直接維持空白，
+    不會再 fallback 到任何本機快取檔案（避免不同公司的資料互相污染）。
 
     只還原 session_state 中尚未存在的鍵，避免覆蓋當次已操作的資料。
     """
+    company_id = st.session_state.get("company_id", "")
+    if not company_id:
+        print("[Supabase警告] load_settings：session_state 尚無 company_id，略過")
+        return
+
     try:
         sb = get_supabase()
 
-        # 取得當前登入公司的 company_id
-        company = sb.table("companies").select("id").eq(
-            "name", st.session_state.get("current_company", "")
-        ).execute()
-        if not company.data:
-            raise ValueError("找不到公司記錄")
-        company_id = company.data[0]["id"]
-
-        # 取得所有已發布的訓練設定（按時間正序，最新的在最後）
         result = sb.table("training_sets").select("*").eq(
             "company_id", company_id
         ).eq(
@@ -42,9 +38,10 @@ def load_settings() -> None:
         ).execute()
 
         if not result.data:
-            raise ValueError("無已發布的訓練設定")
+            # 全新公司或尚未上傳教材，這是正常狀態，不是錯誤
+            print("[Supabase] load_settings：此公司尚無已發布的訓練設定（正常）")
+            return
 
-        # 合併所有 PDF 的題目
         combined_questions = []
         combined_by_category = {}
         for row in result.data:
@@ -55,11 +52,9 @@ def load_settings() -> None:
                 combined_by_category[cat].extend(qs)
             combined_questions.extend(row.get("questions") or [])
 
-        # 其他設定從最新那筆取
         latest = result.data[-1]
         all_filenames = "、".join(r.get("filename", "") for r in result.data)
 
-        # 欄位映射（Supabase 欄位名 → session_state 鍵名）
         mapping = {
             "main_analysis":         latest.get("main_analysis"),
             "questions":             combined_questions,
@@ -79,17 +74,10 @@ def load_settings() -> None:
         print("[Supabase] load_settings 成功")
 
     except Exception as e:
-        print(f"[Supabase警告] load_settings 失敗：{e}，嘗試從 JSON 備援讀取")
-        # Fallback：從本機 company_settings.json 讀取
-        if SETTINGS_FILE.exists():
-            try:
-                data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-                for key, val in data.items():
-                    if key not in st.session_state:
-                        st.session_state[key] = val
-                print("[JSON] load_settings fallback 成功")
-            except Exception as e:
-                st.warning(f"⚠️ 本機設定載入失敗：{str(e)}，將使用預設值")
+        # 這裡只會是真正的連線／查詢錯誤（例如 Supabase 暫時連不上），
+        # 不再 fallback 到本機 JSON，避免不同公司的資料互相污染
+        print(f"[Supabase警告] load_settings 失敗：{e}")
+        st.warning(f"⚠️ 讀取公司設定時發生問題，部分資料可能需要重新整理頁面：{str(e)}")
 
 
 def get_or_create_company(name: str = "") -> str:
@@ -151,37 +139,31 @@ def toggle_training_set_active(training_set_id: str, is_active: bool) -> bool:
 
 def save_settings() -> None:
     """
-    將 PERSIST_KEYS 中有值的鍵寫入 company_settings.json。
-    主管下次重整頁面後，load_settings() 會自動還原這些設定。
-    同時嘗試將訓練集資料同步至 Supabase training_sets 資料表。
+    將本次上傳/發布的訓練集資料同步至 Supabase training_sets 資料表。
     """
-    data = {k: st.session_state[k] for k in PERSIST_KEYS if k in st.session_state}
-    SETTINGS_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
+    company_id = st.session_state.get("company_id", "")
+    if not company_id:
+        st.warning("⚠️ 尚未取得公司身份，無法儲存設定")
+        return
 
-    # 同步至 Supabase（失敗只 print 警告，不中斷主流程）
     try:
         sb = get_supabase()
-        company_id = get_or_create_company(st.session_state.get("current_company", ""))
-        if company_id:
-            sb.table("training_sets").insert({
-                "company_id":            company_id,
-                "filename":              st.session_state.get("analyzed_filename", ""),
-                "product_name":          st.session_state.get("product_name", ""),
-                "main_analysis":         st.session_state.get("main_analysis", ""),
-                "product_benefits":      st.session_state.get("product_benefits", ""),
-                "target_audience":       st.session_state.get("target_audience", ""),
-                "questions":             st.session_state.get("questions", []),
-                "published_questions":   st.session_state.get("published_questions", []),
-                "customer_scenario":     st.session_state.get("customer_scenario", ""),
-                "questions_by_category": st.session_state.get("questions_by_category", {}),
-                "is_published":          True
-            }).execute()
-            print("[Supabase] training_sets 儲存成功")
+        sb.table("training_sets").insert({
+            "company_id":            company_id,
+            "filename":              st.session_state.get("analyzed_filename", ""),
+            "product_name":          st.session_state.get("product_name", ""),
+            "main_analysis":         st.session_state.get("main_analysis", ""),
+            "product_benefits":      st.session_state.get("product_benefits", ""),
+            "target_audience":       st.session_state.get("target_audience", ""),
+            "questions":             st.session_state.get("questions", []),
+            "published_questions":   st.session_state.get("published_questions", []),
+            "customer_scenario":     st.session_state.get("customer_scenario", ""),
+            "questions_by_category": st.session_state.get("questions_by_category", {}),
+            "is_published":          True
+        }).execute()
+        print("[Supabase] training_sets 儲存成功")
     except Exception as e:
-        st.warning(f"⚠️ Supabase 儲存失敗：{str(e)}，設定已存入本機 JSON")
+        st.error(f"⚠️ Supabase 儲存失敗：{str(e)}，請重新嘗試發布")
 
 
 def get_company_by_access_code(access_code: str):
