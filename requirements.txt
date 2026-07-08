@@ -7,3 +7,6 @@ supabase
 python-dotenv
 emoji
 bcrypt
+flask
+line-bot-sdk
+gunicorn
