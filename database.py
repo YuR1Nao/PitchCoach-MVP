@@ -244,3 +244,42 @@ def list_all_companies() -> list:
     except Exception as e:
         print(f"[Supabase警告] list_all_companies 失敗：{e}")
         return []
+
+
+def get_company_training_material(company_id: str) -> dict:
+    """
+    依 company_id 直接查詢該公司已發布的訓練教材，回傳純 dict。
+    不寫入 st.session_state，供不依賴 Streamlit 的服務（例如 LINE Bot）使用。
+    找不到資料時回傳空 dict，呼叫端要自行處理「尚無教材」的情況。
+    """
+    try:
+        sb = get_supabase()
+        result = sb.table("training_sets").select("*").eq(
+            "company_id", company_id
+        ).eq(
+            "is_published", True
+        ).eq(
+            "is_active", True
+        ).order(
+            "created_at", desc=False
+        ).execute()
+
+        if not result.data:
+            return {}
+
+        combined_questions = []
+        for row in result.data:
+            combined_questions.extend(row.get("questions") or [])
+
+        latest = result.data[-1]
+
+        return {
+            "main_analysis":     latest.get("main_analysis", ""),
+            "product_name":      latest.get("product_name", ""),
+            "product_benefits":  latest.get("product_benefits", ""),
+            "customer_scenario": latest.get("customer_scenario", ""),
+            "questions":         combined_questions,
+        }
+    except Exception as e:
+        print(f"[Supabase警告] get_company_training_material 失敗：{e}")
+        return {}

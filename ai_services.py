@@ -75,9 +75,9 @@ def generate_tts_audio(text: str) -> bytes | None:
         return None
 
 
-def speech_to_text(audio_file, hint_text: str = "") -> str | None:
+def speech_to_text(audio_file, hint_text: str = "", product_name: str = "") -> str | None:
     """
-    使用 OpenAI Whisper API 將 st.audio_input 的音訊轉成繁體中文文字。
+    使用 OpenAI Whisper API 將音訊轉成繁體中文文字。
 
     優勢（對比 Google STT）：
     - 支援台語、中英混雜、口音、專有名詞
@@ -92,7 +92,7 @@ def speech_to_text(audio_file, hint_text: str = "") -> str | None:
         client      = openai.OpenAI(api_key=OPENAI_API_KEY)
         audio_bytes = audio_file.read()
         if len(audio_bytes) < 500:
-            st.warning(f"⚠️ 麥克風收到資料量過少（{len(audio_bytes)} bytes），請檢查麥克風裝置")
+            print(f"⚠️ 麥克風收到資料量過少（{len(audio_bytes)} bytes）")
             return None
 
         # Whisper 支援 webm/wav/mp4/mp3 等格式；瀏覽器通常錄製成 webm
@@ -107,7 +107,6 @@ def speech_to_text(audio_file, hint_text: str = "") -> str | None:
         recognized_text = transcript.text.strip()
 
         # 品牌名稱修正：對每個詞和產品名稱做相似度比對，超過 60% 自動替換
-        product_name = st.session_state.get("product_name", "")
         if product_name and len(product_name) >= 2:
             words = recognized_text.split()
             corrected_words = []
@@ -124,10 +123,10 @@ def speech_to_text(audio_file, hint_text: str = "") -> str | None:
         return recognized_text or None
 
     except openai.AuthenticationError:
-        st.error("❌ OpenAI API Key 無效，請確認 .env 裡的 OPENAI_API_KEY")
+        print("❌ OpenAI API Key 無效，請確認 .env 裡的 OPENAI_API_KEY")
         return None
     except Exception as e:
-        st.error(f"❌ 語音辨識失敗：{type(e).__name__}: {str(e)}")
+        print(f"❌ 語音辨識失敗：{type(e).__name__}: {str(e)}")
         return None
 
 

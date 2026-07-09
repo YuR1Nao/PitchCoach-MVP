@@ -1197,11 +1197,13 @@ if tab2 is not None:
             _benefits = st.session_state.get("product_benefits", "")[:50]
             _hint = "，".join(filter(None, [_product, _filename, _benefits]))
             with st.spinner("🔄 辨識中..."):
-                recognized = speech_to_text(audio_value, hint_text=_hint)
+                recognized = speech_to_text(audio_value, hint_text=_hint, product_name=_product)
             if recognized:
                 st.session_state["pending_voice_text"] = recognized
                 st.session_state["voice_key_counter"]  = voice_key + 1
                 st.rerun()
+            elif recognized is None:
+                st.error("❌ 語音辨識失敗，請重新錄音或改用文字輸入")
             else:
                 st.warning("⚠️ 無法辨識，請重試")
 
