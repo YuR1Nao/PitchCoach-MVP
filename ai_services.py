@@ -75,7 +75,13 @@ def generate_tts_audio(text: str) -> bytes | None:
         return None
 
 
-def speech_to_text(audio_file, hint_text: str = "", product_name: str = "") -> str | None:
+def speech_to_text(
+    audio_file,
+    hint_text: str = "",
+    product_name: str = "",
+    audio_filename: str = "audio.webm",
+    audio_mime_type: str = "audio/webm",
+) -> str | None:
     """
     使用 OpenAI Whisper API 將音訊轉成繁體中文文字。
 
@@ -83,6 +89,16 @@ def speech_to_text(audio_file, hint_text: str = "", product_name: str = "") -> s
     - 支援台語、中英混雜、口音、專有名詞
     - 直接接受瀏覽器錄製的 WebM/Opus 格式，無需格式轉換
     - 抗噪能力強，低品質麥克風也能準確辨識
+
+    audio_filename / audio_mime_type：
+    - 這個函式被網頁版（瀏覽器錄音，實際格式是 webm/opus）和 LINE 版
+      （LINE 官方下載的語音訊息，實際格式是 m4a）共用，兩邊音檔的真實
+      容器格式不同，必須各自傳入正確的副檔名與 MIME 類型，Whisper 才能
+      正確解碼；標錯格式時常常不會丟出例外，而是安靜地回傳空字串或
+      亂碼，不容易從錯誤訊息察覺。
+    - 網頁版沿用預設值（webm），呼叫端不需修改。
+    - LINE 版呼叫時必須傳入 audio_filename="audio.m4a"、
+      audio_mime_type="audio/m4a"。
 
     失敗情況（全部靜默回傳 None，不崩潰）：
     - AuthenticationError：OpenAI API Key 錯誤
@@ -95,11 +111,10 @@ def speech_to_text(audio_file, hint_text: str = "", product_name: str = "") -> s
             print(f"⚠️ 麥克風收到資料量過少（{len(audio_bytes)} bytes）")
             return None
 
-        # Whisper 支援 webm/wav/mp4/mp3 等格式；瀏覽器通常錄製成 webm
-        # 以 tuple (檔名, BytesIO, MIME類型) 傳遞，讓 SDK 正確判斷格式
+        # 副檔名與 MIME 類型必須對應音檔的真實格式，Whisper 才能正確解碼
         transcript = client.audio.transcriptions.create(
             model    = "whisper-1",
-            file     = ("audio.webm", io.BytesIO(audio_bytes), "audio/webm"),
+            file     = (audio_filename, io.BytesIO(audio_bytes), audio_mime_type),
             language = "zh",
             prompt   = hint_text if hint_text else "業務推廣，產品說明，客戶疑慮",
         )

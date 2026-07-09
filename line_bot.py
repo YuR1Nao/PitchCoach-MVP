@@ -176,7 +176,13 @@ def safe_handle_audio(line_user_id: str, message_id: str):
             material = get_company_training_material(session["company_id"])
             product_name = material.get("product_name", "")
 
-        text = speech_to_text(io.BytesIO(audio_bytes), hint_text=product_name, product_name=product_name)
+        text = speech_to_text(
+            io.BytesIO(audio_bytes),
+            hint_text=product_name,
+            product_name=product_name,
+            audio_filename="audio.m4a",
+            audio_mime_type="audio/m4a",
+        )
         if not text:
             push(line_user_id, "抱歉，我剛剛沒有聽清楚，可以再說一次，或用打字的也可以：")
             return
