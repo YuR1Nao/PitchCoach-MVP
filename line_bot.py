@@ -41,22 +41,31 @@ def save_session(line_user_id: str, fields: dict):
     sb.table("line_sessions").upsert(payload, on_conflict="line_user_id").execute()
 
 
-def check_and_lock_event(line_user_id: str, message_id: str):
+def try_claim_message_id(message_id: str, line_user_id: str) -> bool:
     """
-    用 LINE 訊息的 message_id 判斷這個事件是不是 LINE 因為 webhook 逾時
-    未收到 200 回應而自動重送的同一個事件。
+    嘗試搶先「認領」這個 message_id 的處理權，利用 Supabase 資料表的
+    PRIMARY KEY 限制達成真正原子性的判斷——不管有多少個請求幾乎同時
+    抵達，資料庫層級保證只有一個 INSERT 會成功，其餘全部會因為違反
+    唯一鍵限制而失敗，藉此徹底避免「先讀再寫」造成的競態條件，尤其
+    是 Render 冷啟動剛醒來、Supabase 查詢變慢時特別容易被觸發的漏洞。
 
-    回傳 (is_duplicate, session)：
-    - is_duplicate=True 代表這個 message_id 已經處理過，呼叫端要直接
-      略過，避免重複呼叫 Claude、重複寫入 Supabase。
-    - 若不是重複事件，會立刻把這個 message_id 記錄成「處理中」標記，
-      再讓背景執行緒繼續做真正的處理。
+    回傳 True：目前這個請求成功搶到處理權，可以繼續往下處理
+    回傳 False：這個 message_id 已經被別的請求（或 LINE 重送）搶先
+                處理過，這次應該直接略過
     """
-    session = get_session(line_user_id)
-    if session and session.get("last_processed_message_id") == message_id:
-        return True, session
-    save_session(line_user_id, {"last_processed_message_id": message_id})
-    return False, session
+    sb = get_supabase()
+    try:
+        sb.table("processed_line_messages").insert({
+            "message_id": message_id,
+            "line_user_id": line_user_id,
+        }).execute()
+        return True
+    except Exception as e:
+        if "duplicate key" in str(e) or "23505" in str(e):
+            return False
+        # 其他未知錯誤：寧可放行繼續處理，也不要讓使用者完全收不到回覆
+        print(f"[LINE Bot警告] try_claim_message_id 未預期錯誤，改為放行處理：{e}")
+        return True
 
 
 def reply(reply_token: str, texts, quick_items=None):
@@ -122,11 +131,11 @@ def on_text(event):
     message_id = event.message.id
     user_text = event.message.text.strip()
 
-    is_dup, session = check_and_lock_event(line_user_id, message_id)
-    if is_dup:
+    if not try_claim_message_id(message_id, line_user_id):
         print(f"[LINE Bot] 偵測到 LINE 重送同一則訊息，略過重複處理：{message_id}")
         return
 
+    session = get_session(line_user_id)
     if session and session.get("state") == "in_conversation":
         try:
             reply(event.reply_token, "🤖 訓練小幫手思考中，請稍候幾秒鐘...")
@@ -141,8 +150,7 @@ def on_audio(event):
     line_user_id = event.source.user_id
     message_id = event.message.id
 
-    is_dup, session = check_and_lock_event(line_user_id, message_id)
-    if is_dup:
+    if not try_claim_message_id(message_id, line_user_id):
         print(f"[LINE Bot] 偵測到 LINE 重送同一則語音訊息，略過重複處理：{message_id}")
         return
 
