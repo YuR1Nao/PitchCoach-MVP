@@ -47,7 +47,12 @@ if not st.session_state["authenticated"]:
     _view = st.query_params.get("view", "")
 
     if _view == "manager":
-        st.title("🎯 PitchCoach 企業主管登入")
+        st.markdown(
+            '<div style="font-size:2rem; font-weight:800; color:#e8e8e6; margin-bottom:0.2rem;">'
+            'Pitch<span style="font-weight:400; color:#a8a8a6;">Coach</span></div>'
+            '<div style="font-size:1.1rem; color:#c4c4c2; margin-bottom:1.2rem;">企業主管登入</div>',
+            unsafe_allow_html=True
+        )
         access_code_input = st.text_input("公司帳號")
         pwd = st.text_input("管理員密碼", type="password")
         if st.button("登入"):
@@ -64,7 +69,12 @@ if not st.session_state["authenticated"]:
                 st.rerun()
 
     elif _view == "employee":
-        st.title("🎯 PitchCoach 員工訓練登入")
+        st.markdown(
+            '<div style="font-size:2rem; font-weight:800; color:#e8e8e6; margin-bottom:0.2rem;">'
+            'Pitch<span style="font-weight:400; color:#a8a8a6;">Coach</span></div>'
+            '<div style="font-size:1.1rem; color:#c4c4c2; margin-bottom:1.2rem;">員工訓練登入</div>',
+            unsafe_allow_html=True
+        )
         username_input = st.text_input("帳號")
         pwd = st.text_input("密碼", type="password")
         if st.button("進入訓練"):
@@ -125,7 +135,11 @@ if not st.session_state["authenticated"]:
             st.error("密碼錯誤")
 
     else:
-        st.title("🎯 PitchCoach")
+        st.markdown(
+            '<div style="font-size:2rem; font-weight:800; color:#e8e8e6; margin-bottom:0.8rem;">'
+            'Pitch<span style="font-weight:400; color:#a8a8a6;">Coach</span></div>',
+            unsafe_allow_html=True
+        )
         st.info("請使用您收到的登入連結進入系統。")
 
     st.stop()
@@ -140,11 +154,11 @@ if "settings_loaded" not in st.session_state:
 # ──────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main { background-color: #f5f5f4; }
+    .main { background-color: #121212; }
 
     /* 品牌標題 */
-    .hero-title { font-size:2.2rem; font-weight:800; color:#1a1a1a; margin-bottom:0.2rem; }
-    .hero-subtitle { font-size:1rem; color:#6c757d; margin-bottom:1.5rem; }
+    .hero-title { font-size:2.2rem; font-weight:800; color:#e8e8e6; margin-bottom:0.2rem; }
+    .hero-subtitle { font-size:1rem; color:#a8a8a6; margin-bottom:1.5rem; }
 
     /* 任務簡報橫幅 — 深黑底 + 金色點綴，僅用於「重要指示」情境 */
     .mission-banner {
@@ -159,30 +173,30 @@ st.markdown("""
 
     /* 鎖定提示 */
     .locked-box {
-        background: #f1f1f0;
-        border: 2px dashed #c4c4c2;
+        background: #242424;
+        border: 2px dashed #4a4a48;
         border-radius: 12px;
         text-align: center;
         padding: 4rem 2rem;
-        color: #868e96;
+        color: #8a8a88;
     }
 
     /* 進度條外框 */
-    .progress-label { font-size:0.85rem; color:#495057; margin-bottom:0.3rem; }
+    .progress-label { font-size:0.85rem; color:#a8a8a6; margin-bottom:0.3rem; }
 
     /* 考題卡片 */
     .question-card {
-        background:white; border-radius:10px; padding:1rem 1.2rem;
-        border:1.5px solid #e0e0de; margin-bottom:0.8rem;
+        background:#242424; border-radius:10px; padding:1rem 1.2rem;
+        border:1.5px solid #3a3a38; margin-bottom:0.8rem;
     }
     .question-card-selected {
-        background:#faf6ea; border-radius:10px; padding:1rem 1.2rem;
+        background:rgba(201,162,39,0.12); border-radius:10px; padding:1rem 1.2rem;
         border:1.5px solid #c9a227; margin-bottom:0.8rem;
     }
     .selection-hint {
-        background:#faf6ea; border-left:4px solid #c9a227;
+        background:rgba(201,162,39,0.12); border-left:4px solid #c9a227;
         border-radius:0; padding:0.7rem 1rem; margin-bottom:1rem;
-        font-size:0.92rem; color:#5d4a1f;
+        font-size:0.92rem; color:#e8d9a8;
     }
 
     /* 對話完成橫幅 — 深灰底 + 金色文字，慶祝完成這個時刻 */
@@ -192,8 +206,8 @@ st.markdown("""
         padding: 1.2rem 1.8rem; margin: 1rem 0; text-align: center;
     }
 
-    .upload-hint { font-size:0.88rem; color:#868e96; margin-top:0.4rem; }
-    hr { border-color:#dee2e6; }
+    .upload-hint { font-size:0.88rem; color:#8a8a88; margin-top:0.4rem; }
+    hr { border-color:#3a3a38; }
 
     /* 隱藏 Streamlit 預設 footer、選單與工具列，去除平台識別痕跡 */
     footer { visibility:hidden; }
@@ -226,8 +240,8 @@ with st.sidebar:
 col_logo, _ = st.columns([1, 4])
 with col_logo:
     st.markdown(
-        '<div style="font-size:1.6rem; font-weight:800; color:#1a1a1a;">'
-        'Pitch<span style="font-weight:400; color:#8a8a88;">Coach</span></div>',
+        '<div style="font-size:1.6rem; font-weight:800; color:#e8e8e6;">'
+        'Pitch<span style="font-weight:400; color:#a8a8a6;">Coach</span></div>',
         unsafe_allow_html=True
     )
 st.markdown("---")
