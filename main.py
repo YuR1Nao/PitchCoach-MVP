@@ -140,27 +140,27 @@ if "settings_loaded" not in st.session_state:
 # ──────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main { background-color: #f8f9fa; }
+    .main { background-color: #f5f5f4; }
 
     /* 品牌標題 */
-    .hero-title { font-size:2.2rem; font-weight:800; color:#1a1a2e; margin-bottom:0.2rem; }
+    .hero-title { font-size:2.2rem; font-weight:800; color:#1a1a1a; margin-bottom:0.2rem; }
     .hero-subtitle { font-size:1rem; color:#6c757d; margin-bottom:1.5rem; }
 
-    /* 任務簡報橫幅 */
+    /* 任務簡報橫幅 — 深黑底 + 金色點綴，僅用於「重要指示」情境 */
     .mission-banner {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2c2c2c 100%);
         color: white;
         border-radius: 12px;
         padding: 1.4rem 2rem;
         margin-bottom: 1.5rem;
     }
-    .mission-banner h3 { color: #ffd700; margin-bottom: 0.4rem; font-size: 1.1rem; }
+    .mission-banner h3 { color: #c9a227; margin-bottom: 0.4rem; font-size: 1.1rem; }
     .mission-banner p  { margin: 0; font-size: 0.95rem; line-height: 1.7; }
 
     /* 鎖定提示 */
     .locked-box {
-        background: #f1f3f5;
-        border: 2px dashed #ced4da;
+        background: #f1f1f0;
+        border: 2px dashed #c4c4c2;
         border-radius: 12px;
         text-align: center;
         padding: 4rem 2rem;
@@ -173,28 +173,33 @@ st.markdown("""
     /* 考題卡片 */
     .question-card {
         background:white; border-radius:10px; padding:1rem 1.2rem;
-        border:1.5px solid #e9ecef; margin-bottom:0.8rem;
+        border:1.5px solid #e0e0de; margin-bottom:0.8rem;
     }
     .question-card-selected {
-        background:#f0f7ff; border-radius:10px; padding:1rem 1.2rem;
-        border:1.5px solid #4361ee; margin-bottom:0.8rem;
+        background:#faf6ea; border-radius:10px; padding:1rem 1.2rem;
+        border:1.5px solid #c9a227; margin-bottom:0.8rem;
     }
     .selection-hint {
-        background:#fff8e1; border-left:4px solid #ffc107;
-        border-radius:6px; padding:0.7rem 1rem; margin-bottom:1rem;
-        font-size:0.92rem; color:#5d4037;
+        background:#faf6ea; border-left:4px solid #c9a227;
+        border-radius:0; padding:0.7rem 1rem; margin-bottom:1rem;
+        font-size:0.92rem; color:#5d4a1f;
     }
 
-    /* 對話完成橫幅 */
+    /* 對話完成橫幅 — 深灰底 + 金色文字，慶祝完成這個時刻 */
     .completion-banner {
-        background: linear-gradient(135deg, #0f5132, #198754);
-        color: white; border-radius: 12px;
+        background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
+        color: #ffd966; border-radius: 12px;
         padding: 1.2rem 1.8rem; margin: 1rem 0; text-align: center;
     }
 
     .upload-hint { font-size:0.88rem; color:#868e96; margin-top:0.4rem; }
     hr { border-color:#dee2e6; }
+
+    /* 隱藏 Streamlit 預設 footer、選單與工具列，去除平台識別痕跡 */
     footer { visibility:hidden; }
+    #MainMenu { visibility:hidden; }
+    header[data-testid="stHeader"] { background: transparent; }
+    [data-testid="stToolbar"] { visibility:hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -220,7 +225,11 @@ with st.sidebar:
 
 col_logo, _ = st.columns([1, 4])
 with col_logo:
-    st.markdown("### 🎯 PitchCoach")
+    st.markdown(
+        '<div style="font-size:1.6rem; font-weight:800; color:#1a1a1a;">'
+        'Pitch<span style="font-weight:400; color:#8a8a88;">Coach</span></div>',
+        unsafe_allow_html=True
+    )
 st.markdown("---")
 st.markdown('<p class="hero-title">企業中控台 v3</p>', unsafe_allow_html=True)
 st.markdown('<p class="hero-subtitle">主管中控台負責設定訓練劇本；員工實戰沙盒提供 AI 客戶角色扮演練習。</p>', unsafe_allow_html=True)
@@ -1082,7 +1091,7 @@ if tab2 is not None:
                     _rpt     = st.session_state["evaluation_report"]
                     _score   = _rpt.get("score", 0)
                     _mode    = st.session_state.get("training_mode", "speed")
-                    _color   = "#28a745" if _score >= 80 else ("#ffc107" if _score >= 60 else "#dc3545")
+                    _color   = "#c9a227" if _score >= 80 else ("#6c6c6a" if _score >= 60 else "#a8a8a6")
 
                     if _mode == "speed":
                         _sub_line = "急速模式：僅評估話術能力，不評估成交"
@@ -1449,7 +1458,7 @@ with tab3:
 
                         for idx, rec in enumerate(emp_records):
                             rec_score = rec.get("score", 0)
-                            rec_color = "#28a745" if rec_score >= 80 else ("#ffc107" if rec_score >= 60 else "#dc3545")
+                            rec_color = "#c9a227" if rec_score >= 80 else ("#6c6c6a" if rec_score >= 60 else "#a8a8a6")
                             rec_date  = rec.get("created_at", "")[:16].replace("T", " ")
                             header_label = f"{'📌 最近一次' if idx == 0 else '📅 ' + rec_date} ・ {rec_score} 分"
 
@@ -1469,9 +1478,9 @@ with tab3:
                                     strength = rec.get("strength", "")
                                     if strength:
                                         st.markdown(
-                                            f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
-                                            f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                            f'<div style="font-size:0.8rem;color:#28a745;font-weight:700;">✨ 本次表現亮點</div>'
+                                            f'<div style="background:rgba(201,162,39,0.1);border-left:4px solid #c9a227;'
+                                            f'border-radius:0;padding:1rem 1.2rem;">'
+                                            f'<div style="font-size:0.8rem;color:#c9a227;font-weight:700;">✨ 本次表現亮點</div>'
                                             f'<div style="font-size:0.9rem;color:#e9ecef;margin-top:0.3rem;">{strength}</div>'
                                             f'</div>',
                                             unsafe_allow_html=True
@@ -1482,9 +1491,9 @@ with tab3:
                                     st.markdown("**🎯 下次練習重點**")
                                     for i, tip in enumerate(tips, 1):
                                         st.markdown(
-                                            f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
-                                            f'border-radius:0 12px 12px 0;padding:0.8rem 1.2rem;margin-bottom:0.5rem;">'
-                                            f'<span style="font-size:0.8rem;color:#ffc107;">改善點 {i}</span><br>'
+                                            f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                                            f'border-radius:0;padding:0.8rem 1.2rem;margin-bottom:0.5rem;">'
+                                            f'<span style="font-size:0.8rem;color:#c4c4c2;">改善點 {i}</span><br>'
                                             f'<span style="font-size:0.9rem;color:#e9ecef;">{tip}</span>'
                                             f'</div>',
                                             unsafe_allow_html=True
@@ -1493,18 +1502,18 @@ with tab3:
                                 col_lb, col_rb = st.columns(2)
                                 with col_lb:
                                     st.markdown(
-                                        f'<div style="background:rgba(0,123,255,0.08);border-left:4px solid #007bff;'
-                                        f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                        f'<div style="font-size:0.8rem;color:#4dabf7;font-weight:700;">🔵 左腦分析</div>'
+                                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                                        f'border-radius:0;padding:1rem 1.2rem;">'
+                                        f'<div style="font-size:0.8rem;color:#c4c4c2;font-weight:700;">左腦分析</div>'
                                         f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
                                         f'{rec.get("left_brain","—")}</div></div>',
                                         unsafe_allow_html=True
                                     )
                                 with col_rb:
                                     st.markdown(
-                                        f'<div style="background:rgba(220,53,69,0.08);border-left:4px solid #e05c6e;'
-                                        f'border-radius:0 12px 12px 0;padding:1rem 1.2rem;">'
-                                        f'<div style="font-size:0.8rem;color:#f783ac;font-weight:700;">🔴 右腦分析</div>'
+                                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #6c6c6a;'
+                                        f'border-radius:0;padding:1rem 1.2rem;">'
+                                        f'<div style="font-size:0.8rem;color:#a8a8a6;font-weight:700;">右腦分析</div>'
                                         f'<div style="font-size:0.88rem;color:#e9ecef;margin-top:0.3rem;">'
                                         f'{rec.get("right_brain","—")}</div></div>',
                                         unsafe_allow_html=True
@@ -1665,9 +1674,9 @@ with tab3:
 
                 # ── ⚡ 急速模式總結區塊 ────────────────────
                 st.markdown(
-                    '<div style="background:rgba(0,123,255,0.05);border:1px solid rgba(0,123,255,0.25);'
+                    '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);'
                     'border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
-                    '<div style="font-size:1rem;font-weight:700;color:#4dabf7;margin-bottom:0.8rem;">'
+                    '<div style="font-size:1rem;font-weight:700;color:#c4c4c2;margin-bottom:0.8rem;">'
                     '⚡ 急速模式總結</div>',
                     unsafe_allow_html=True
                 )
@@ -1700,11 +1709,10 @@ with tab3:
                     else:
                         _s_title, _s_content = "🟢 維持精進", "急速模式表現良好，左右腦能力發展平均，建議安排進階情境演練，針對高難度客戶類型進行專項訓練。"
 
-                    _color = "#dc3545" if "🔴" in _s_title else ("#ffc107" if "🟡" in _s_title else "#28a745")
                     st.markdown(
-                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {_color};'
-                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-top:0.6rem;">'
-                        f'<div style="font-size:0.85rem;font-weight:700;color:{_color};margin-bottom:0.4rem;">{_s_title}</div>'
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                        f'border-radius:0;padding:1rem 1.4rem;margin-top:0.6rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:#c4c4c2;margin-bottom:0.4rem;">{_s_title}</div>'
                         f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{_s_content}</div>'
                         f'</div>',
                         unsafe_allow_html=True
@@ -1714,9 +1722,9 @@ with tab3:
 
                 # ── 🎯 深度模式分析區塊 ────────────────────
                 st.markdown(
-                    '<div style="background:rgba(220,53,69,0.05);border:1px solid rgba(220,53,69,0.25);'
+                    '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);'
                     'border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
-                    '<div style="font-size:1rem;font-weight:700;color:#f783ac;margin-bottom:0.8rem;">'
+                    '<div style="font-size:1rem;font-weight:700;color:#c4c4c2;margin-bottom:0.8rem;">'
                     '🎯 深度模式分析</div>',
                     unsafe_allow_html=True
                 )
@@ -1762,11 +1770,10 @@ with tab3:
                     else:
                         _d_title, _d_content = "🟢 維持精進", "深度模式成交表現穩定，三大維度發展平均，持續保持並可挑戰更高難度的客戶情境。"
 
-                    _color = "#dc3545" if "🔴" in _d_title else ("#ffc107" if "🟡" in _d_title else "#28a745")
                     st.markdown(
-                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {_color};'
-                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-top:0.6rem;">'
-                        f'<div style="font-size:0.85rem;font-weight:700;color:{_color};margin-bottom:0.4rem;">{_d_title}</div>'
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                        f'border-radius:0;padding:1rem 1.4rem;margin-top:0.6rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:#c4c4c2;margin-bottom:0.4rem;">{_d_title}</div>'
                         f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">{_d_content}</div>'
                         f'</div>',
                         unsafe_allow_html=True
@@ -1790,9 +1797,9 @@ with tab3:
 
                 if _low_flags:
                     st.markdown(
-                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #dc3545;'
-                        f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;">'
-                        f'<div style="font-size:0.85rem;font-weight:700;color:#dc3545;margin-bottom:0.4rem;">🔴 個別輔導</div>'
+                        f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                        f'border-radius:0;padding:1rem 1.4rem;">'
+                        f'<div style="font-size:0.85rem;font-weight:700;color:#c4c4c2;margin-bottom:0.4rem;">🔴 個別輔導</div>'
                         f'<div style="font-size:0.92rem;line-height:1.7;color:#e9ecef;">'
                         f'以下成員有低於 60 分的訓練記錄，建議安排一對一輔導：{"、".join(_low_flags)}</div>'
                         f'</div>',
@@ -1809,7 +1816,7 @@ with tab3:
                     name     = s.get("employee_name", "匿名員工")
                     date_str = s.get("created_at", "")[:16].replace("T", " ")
                     closing  = s.get("closing_result", "")
-                    color    = "#28a745" if score_v >= 80 else ("#ffc107" if score_v >= 60 else "#dc3545")
+                    color    = "#c9a227" if score_v >= 80 else ("#6c6c6a" if score_v >= 60 else "#a8a8a6")
                     st.markdown(
                         f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid {color};'
                         f'border-radius:0 8px 8px 0;padding:0.6rem 1rem;margin-bottom:0.5rem;">'
@@ -1888,8 +1895,16 @@ with tab3:
                             label="📊 綜合戰力分數",
                             value=f"{score} 分",
                             delta=delta_label,
-                            delta_color="normal" if score >= 80 else "inverse"
+                            delta_color="off"
                         )
+                        if score >= 80:
+                            st.markdown(
+                                '<div style="border:1px solid #c9a227; border-radius:8px; '
+                                'padding:0.4rem 0.8rem; text-align:center; color:#c9a227; '
+                                'font-size:0.85rem; font-weight:700; margin-top:-0.5rem;">'
+                                '✨ 表現亮眼，繼續保持！</div>',
+                                unsafe_allow_html=True
+                            )
                     with col_note:
                         st.info("⚡ 急速模式僅評估左腦邏輯與右腦溝通，不評估成交結果。", icon="ℹ️")
                 else:
@@ -1901,8 +1916,16 @@ with tab3:
                             label="📊 綜合戰力分數",
                             value=f"{score} 分",
                             delta=delta_label,
-                            delta_color="normal" if score >= 80 else "inverse"
+                            delta_color="off"
                         )
+                        if score >= 80:
+                            st.markdown(
+                                '<div style="border:1px solid #c9a227; border-radius:8px; '
+                                'padding:0.4rem 0.8rem; text-align:center; color:#c9a227; '
+                                'font-size:0.85rem; font-weight:700; margin-top:-0.5rem;">'
+                                '✨ 表現亮眼，繼續保持！</div>',
+                                unsafe_allow_html=True
+                            )
                     with col_closing:
                         closing_icon = (
                             "✅" if closing_result == "當場成交"
@@ -1916,8 +1939,8 @@ with tab3:
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # 分數進度條
-                bar_color = "#28a745" if score >= 80 else ("#ffc107" if score >= 60 else "#dc3545")
+                # 分數進度條 — 高分金色，其餘灰階深淺表現
+                bar_color = "#c9a227" if score >= 80 else ("#6c6c6a" if score >= 60 else "#a8a8a6")
                 st.markdown(
                     f'<div style="background:#2d2d3a;border-radius:8px;height:12px;overflow:hidden;">'
                     f'<div style="width:{score}%;height:100%;background:{bar_color};'
@@ -1935,10 +1958,10 @@ with tab3:
 
                 with col_left:
                     st.markdown(
-                        '<div style="background:rgba(0,123,255,0.08);border-left:4px solid #007bff;'
-                        'border-radius:0 12px 12px 0;padding:1.2rem 1.4rem;">'
-                        '<div style="font-size:1rem;font-weight:700;color:#4dabf7;margin-bottom:0.6rem;">'
-                        '🔵 左腦：邏輯 & 賣點掌握</div>'
+                        '<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                        'border-radius:0;padding:1.2rem 1.4rem;">'
+                        '<div style="font-size:1rem;font-weight:700;color:#c4c4c2;margin-bottom:0.6rem;">'
+                        '左腦：邏輯 & 賣點掌握</div>'
                         f'<div style="font-size:0.93rem;line-height:1.7;color:#e9ecef;">{left_brain}</div>'
                         '</div>',
                         unsafe_allow_html=True
@@ -1946,10 +1969,10 @@ with tab3:
 
                 with col_right:
                     st.markdown(
-                        '<div style="background:rgba(220,53,69,0.08);border-left:4px solid #e05c6e;'
-                        'border-radius:0 12px 12px 0;padding:1.2rem 1.4rem;">'
-                        '<div style="font-size:1rem;font-weight:700;color:#f783ac;margin-bottom:0.6rem;">'
-                        '🔴 右腦：同理心 & 溝通溫度</div>'
+                        '<div style="background:rgba(255,255,255,0.04);border-left:4px solid #6c6c6a;'
+                        'border-radius:0;padding:1.2rem 1.4rem;">'
+                        '<div style="font-size:1rem;font-weight:700;color:#a8a8a6;margin-bottom:0.6rem;">'
+                        '右腦：同理心 & 溝通溫度</div>'
                         f'<div style="font-size:0.93rem;line-height:1.7;color:#e9ecef;">{right_brain}</div>'
                         '</div>',
                         unsafe_allow_html=True
@@ -1968,8 +1991,8 @@ with tab3:
                 if strength:
                     st.markdown("### ✨ 本次表現亮點")
                     st.markdown(
-                        f'<div style="background:rgba(40,167,69,0.1);border-left:4px solid #28a745;'
-                        f'border-radius:0 12px 12px 0;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
+                        f'<div style="background:rgba(201,162,39,0.1);border-left:4px solid #c9a227;'
+                        f'border-radius:0;padding:1.2rem 1.4rem;margin-bottom:1rem;">'
                         f'<div style="font-size:0.95rem;line-height:1.7;color:#e9ecef;">👍 {strength}</div>'
                         f'</div>',
                         unsafe_allow_html=True
@@ -1981,9 +2004,9 @@ with tab3:
                     st.markdown("### 🎯 下次練習重點")
                     for i, tip in enumerate(improvement_tips, 1):
                         st.markdown(
-                            f'<div style="background:rgba(255,193,7,0.08);border-left:4px solid #ffc107;'
-                            f'border-radius:0 12px 12px 0;padding:1rem 1.4rem;margin-bottom:0.6rem;">'
-                            f'<div style="font-size:0.85rem;font-weight:700;color:#ffc107;margin-bottom:0.3rem;">'
+                            f'<div style="background:rgba(255,255,255,0.04);border-left:4px solid #8a8a88;'
+                            f'border-radius:0;padding:1rem 1.4rem;margin-bottom:0.6rem;">'
+                            f'<div style="font-size:0.85rem;font-weight:700;color:#c4c4c2;margin-bottom:0.3rem;">'
                             f'改善點 {i}</div>'
                             f'<div style="font-size:0.93rem;line-height:1.7;color:#e9ecef;">{tip}</div>'
                             f'</div>',
@@ -1998,7 +2021,7 @@ with tab3:
                     for turn_i, msg in enumerate(chat_history_for_report, 1):
                         role_label    = "🧑‍💼 業務員" if msg["role"] == "user" else "🧑 AI 客戶"
                         clean_content = msg["content"].replace("[TEST_COMPLETE]", "").strip()
-                        bg = "rgba(255,255,255,0.04)" if msg["role"] == "user" else "rgba(0,123,255,0.06)"
+                        bg = "rgba(255,255,255,0.04)" if msg["role"] == "user" else "rgba(138,138,136,0.08)"
                         st.markdown(
                             f'<div style="background:{bg};border-radius:8px;padding:0.75rem 1rem;'
                             f'margin-bottom:0.5rem;">'
@@ -2021,7 +2044,7 @@ with tab3:
 st.markdown("---")
 st.markdown(
     '<div style="text-align:center;color:#adb5bd;font-size:0.8rem;">'
-    'PitchCoach 企業中控台 v3　｜　Powered by Claude AI & Streamlit'
+    'PitchCoach 企業中控台'
     '</div>',
     unsafe_allow_html=True
 )
