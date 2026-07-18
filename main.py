@@ -463,10 +463,17 @@ if tab1 is not None:
                                 f"以涵蓋更完整的題目。"
                             )
 
-                        # 清除舊的考題 widget 狀態
-                        for i in range(15):
-                            st.session_state.pop(f"q_text_{i}", None)
-                            st.session_state.pop(f"q_check_{i}", None)
+                        # 清除舊的考題 widget 狀態（動態掃描，不寫死題數上限）
+                        # 題庫不管累積到多大（30題、90題、上百題）都能完整清除，
+                        # 避免舊的勾選/編輯狀態殘留、意外附著到新題目上。
+                        # 這裡順便把「隨機挑戰模式」編輯框（q_text_random_*）也一併
+                        # 納入清除範圍，因為它也是同一種「舊題目換新後殘留舊狀態」的問題。
+                        _stale_widget_keys = [
+                            k for k in st.session_state.keys()
+                            if k.startswith("q_text_") or k.startswith("q_check_")
+                        ]
+                        for k in _stale_widget_keys:
+                            st.session_state.pop(k, None)
                         # 清除員工端舊的對話記錄
                         st.session_state.pop("chat_history", None)
                         st.session_state.pop("current_q_idx", None)
