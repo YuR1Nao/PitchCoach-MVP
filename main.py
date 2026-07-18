@@ -417,7 +417,7 @@ if tab1 is not None:
                     else:
                         # 第一階段：產出三大重點分析（Markdown）
                         main_analysis = analyze_with_claude(document_text)
-                        # 第二階段：按 5 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
+                        # 第二階段：按 6 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
                         questions_dict, question_gen_meta = generate_questions_json(document_text)
 
                         # 合併為扁平 list，供現有的 UI/邏輯向下相容
@@ -520,7 +520,8 @@ if tab1 is not None:
                     global_q_idx = 0  # 跨類別統一題號索引
 
                     if questions_by_category:
-                        # ── 有分類資料：按 5 大類別用 expander 展開顯示 ──
+                        # ── 有分類資料：按類別用 expander 展開顯示（分類標籤來自 config.CATEGORY_LABELS，
+                        #     會自動反映新增/移除的分類，不寫死數字）──
                         for cat_key, cat_label in CATEGORY_LABELS.items():
                             cat_questions = questions_by_category.get(cat_key, [])
                             if not cat_questions:
@@ -664,8 +665,11 @@ if tab1 is not None:
                     if questions_by_category:
                         # ── 有分類資料：按類別摘要顯示（可折疊）────────────
                         total_count = sum(len(qs) for qs in questions_by_category.values())
+                        # 動態計算「實際有題目的類別數」，不寫死5或6，
+                        # 之後不管新增/移除分類，這裡都會自動反映正確數字
+                        active_cat_count = sum(1 for qs in questions_by_category.values() if qs)
                         st.success(
-                            f"✅ 題庫共 {total_count} 題，分為 5 大類別，"
+                            f"✅ 題庫共 {total_count} 題，分為 {active_cat_count} 大類別，"
                             f"系統每次從不同類別各抽 1 題（共 2 題）。"
                         )
                         cat_labels_short = {
@@ -674,6 +678,7 @@ if tab1 is not None:
                             "cat_3_trust":       "🛡️ 信任疑慮類",
                             "cat_4_competition": "⚔️ 競品比較類",
                             "cat_5_decision":    "🚪 決策障礙類",
+                            "cat_org_trust":     "🏢 組織與商業模式疑慮類",
                             "cat_6_custom":      "✏️ 主管自訂類",
                         }
                         for cat_key, cat_label in cat_labels_short.items():

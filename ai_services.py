@@ -441,6 +441,7 @@ _EMPTY_CATEGORIES: dict = {
     "cat_3_trust":       [],
     "cat_4_competition": [],
     "cat_5_decision":    [],
+    "cat_org_trust":     [],
 }
 
 
@@ -477,7 +478,7 @@ def _trim_questions_to_limit(questions_dict: dict, limit: int = TOTAL_QUESTION_L
 
 def generate_questions_json(document_text: str) -> tuple[dict, dict]:
     """
-    第二次 API 呼叫：按 5 大通用銷售障礙類別智能生成刁難考題，
+    第二次 API 呼叫：按 6 大通用銷售障礙類別智能生成刁難考題，
     全部類別「加總」最多 TOTAL_QUESTION_LIMIT（目前=30）題，
     各類別彼此之間不設個別上限，完全依材料在各類別的豐富程度動態分配。
 
@@ -489,8 +490,11 @@ def generate_questions_json(document_text: str) -> tuple[dict, dict]:
         "cat_3_trust":       [N 道題 str, ...],
         "cat_4_competition": [N 道題 str, ...],
         "cat_5_decision":    [N 道題 str, ...],
+        "cat_org_trust":     [N 道題 str, ...],
     }
-    （N 由 AI 依材料豐富度自行判斷，各類別題數可能不同，加總不超過上限）
+    （N 由 AI 依材料豐富度自行判斷，各類別題數可能不同，加總不超過上限；
+    cat_org_trust 是組織/商業模式信任疑慮，跟 cat_3_trust 的產品信任疑慮不同，
+    只有材料涉及直銷、保險、加盟等需要建立組織信任的商業模式時才會有內容）
 
     meta：{"total_generated": int, "total_kept": int, "was_trimmed": bool}
     供呼叫端判斷是否需要提醒使用者「材料豐富度超過單次上限，已裁切」。
@@ -504,7 +508,7 @@ def generate_questions_json(document_text: str) -> tuple[dict, dict]:
     client = anthropic.Anthropic(api_key=API_KEY)
 
     system_prompt = """你是一個專業的銷售訓練專家。
-請根據文件內容，為以下5個通用銷售障礙類別智能判斷並生成刁難考題。
+請根據文件內容，為以下6個通用銷售障礙類別智能判斷並生成刁難考題。
 
 【核心原則】
 - 只根據文件中確實存在的內容出題
@@ -520,10 +524,11 @@ def generate_questions_json(document_text: str) -> tuple[dict, dict]:
   "cat_2_price": ["Q1. 客戶問題 👉 建議回答方向：具體建議"],
   "cat_3_trust": [],
   "cat_4_competition": [],
-  "cat_5_decision": ["Q1. 客戶問題 👉 建議回答方向：具體建議"]
+  "cat_5_decision": ["Q1. 客戶問題 👉 建議回答方向：具體建議"],
+  "cat_org_trust": ["Q1. 客戶問題 👉 建議回答方向：具體建議"]
 }
 
-【五大類別定義】
+【六大類別定義】
 
 cat_1_product（產品理解類）：
 客戶對產品本身的疑慮：使用方式、適用族群、禁忌症、注意事項。
@@ -549,6 +554,19 @@ cat_5_decision（決策障礙類）：
 客戶心動但拖延：「再想想」「問家人」「下次再說」。
 ✅ 屬於這類：「我考慮一下」「要跟家人商量」「這個月預算用完了」
 ⚠️ 這類題通常適用於任何產品，可以根據產品客群特性調整
+
+cat_org_trust（組織與商業模式疑慮類）：
+客戶對「這家公司／這個經營方式／這個商業模式」本身的懷疑，不是對產品本身
+效果或安全的懷疑，這兩種疑慮性質不同，不要混為一談。
+✅ 屬於這類：「這是不是直銷／老鼠會」「是不是要拉我當下線／會員」「你們公司
+到底想幹嘛」「聽起來像話術／情感壓力」「說的願景／數字是不是誇大」「這是不
+是騙人的公司」
+❌ 不屬於這類：產品有沒有效、產品貴不貴、跟其他家產品比較——這些仍應歸類到
+cat_1_product／cat_2_price／cat_3_trust／cat_4_competition
+⚠️ 這類疑慮常見於直銷、保險、加盟、社群電商這種「需要先讓客戶信任組織／經
+營者本身，才能談產品」的商業模式。如果文件是單純零售型產品說明（例如一般
+3C 產品、家電），材料裡通常不會有這類疑慮內容，此時應誠實回傳空陣列 []，
+不要為了填滿這個類別而勉強生成不符合材料情境的題目
 
 【好題目 vs 壞題目對照範例】
 
@@ -576,7 +594,7 @@ cat_5_decision（決策障礙類）：
 - 每道題格式：「Q數字. 客戶說的話 👉 建議回答方向：具體建議」
 - 客戶問題必須是客戶會說的話，不是產品說明
 - 建議回答方向必須根據文件的真實資訊撰寫，不要憑空捏造
-- 全部5個類別「加總」最多{TOTAL_LIMIT}題，各類別彼此之間不設個別上限，
+- 全部6個類別「加總」最多{TOTAL_LIMIT}題，各類別彼此之間不設個別上限，
   完全由你依材料在各類別的豐富程度智能分配（某類別材料特別豐富可以多分配
   幾題，某類別材料稀薄就少分配甚至回傳空陣列）
 - 沒有足夠素材的類別請回傳空陣列 []

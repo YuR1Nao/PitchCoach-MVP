@@ -23,6 +23,7 @@ CATEGORY_LABELS = {
     "cat_3_trust":       "🛡️ 第三類：信任疑慮",
     "cat_4_competition": "⚔️ 第四類：競品比較",
     "cat_5_decision":    "🚪 第五類：決策障礙",
+    "cat_org_trust":     "🏢 第六類：組織與商業模式疑慮",
 }
 
 EDGE_TTS_VOICE = "zh-TW-HsiaoChenNeural"
