@@ -12,7 +12,7 @@ import fitz
 import random
 import difflib
 from config import (API_KEY, OPENAI_API_KEY, EDGE_TTS_VOICE,
-                    EDGE_TTS_RATE, CATEGORY_LABELS)
+                    EDGE_TTS_RATE, CATEGORY_LABELS, TOTAL_QUESTION_LIMIT)
 
 
 def clean_text_for_tts(text: str) -> str:
@@ -444,23 +444,62 @@ _EMPTY_CATEGORIES: dict = {
 }
 
 
-def generate_questions_json(document_text: str) -> dict:
+def _trim_questions_to_limit(questions_dict: dict, limit: int = TOTAL_QUESTION_LIMIT) -> tuple[dict, dict]:
     """
-    第二次 API 呼叫：按 5 大通用銷售障礙類別各生成 5 道刁難考題，共 25 道。
+    程式碼層的保險：無論 AI 是否確實遵守 system prompt 裡「總數最多
+    {limit} 題」的指令，這裡都會實際加總確認，超過上限時才裁切，
+    確保資料庫不會被灌入超量題目（LLM 對數字上限的遵守度不是100%可靠，
+    不能只靠 prompt 文字約束）。
 
-    回傳格式（dict）：
-    {
-        "cat_1_product":     [5 道題 str, ...],
-        "cat_2_price":       [5 道題 str, ...],
-        "cat_3_trust":       [5 道題 str, ...],
-        "cat_4_competition": [5 道題 str, ...],
-        "cat_5_decision":    [5 道題 str, ...],
+    裁切策略：每次裁掉「目前題目數最多的那個類別」的最後一題，
+    輪流裁到總數符合上限為止，避免像切片一樣讓後面的類別被整批犧牲，
+    盡量維持各類別的覆蓋度與多樣性。
+
+    回傳：(裁切後的 questions_dict, meta)
+    meta 包含 total_generated（AI原本生成的總數）、
+    total_kept（裁切後保留的總數）、was_trimmed（是否有發生裁切）。
+    """
+    trimmed = {k: list(v) for k, v in questions_dict.items()}
+    total_generated = sum(len(v) for v in trimmed.values())
+
+    while sum(len(v) for v in trimmed.values()) > limit:
+        richest_cat = max(trimmed, key=lambda k: len(trimmed[k]))
+        trimmed[richest_cat].pop()
+
+    total_kept = sum(len(v) for v in trimmed.values())
+    meta = {
+        "total_generated": total_generated,
+        "total_kept": total_kept,
+        "was_trimmed": total_generated > limit,
     }
+    return trimmed, meta
+
+
+def generate_questions_json(document_text: str) -> tuple[dict, dict]:
+    """
+    第二次 API 呼叫：按 5 大通用銷售障礙類別智能生成刁難考題，
+    全部類別「加總」最多 TOTAL_QUESTION_LIMIT（目前=30）題，
+    各類別彼此之間不設個別上限，完全依材料在各類別的豐富程度動態分配。
+
+    回傳格式：tuple(questions_dict, meta)
+    questions_dict：
+    {
+        "cat_1_product":     [N 道題 str, ...],
+        "cat_2_price":       [N 道題 str, ...],
+        "cat_3_trust":       [N 道題 str, ...],
+        "cat_4_competition": [N 道題 str, ...],
+        "cat_5_decision":    [N 道題 str, ...],
+    }
+    （N 由 AI 依材料豐富度自行判斷，各類別題數可能不同，加總不超過上限）
+
+    meta：{"total_generated": int, "total_kept": int, "was_trimmed": bool}
+    供呼叫端判斷是否需要提醒使用者「材料豐富度超過單次上限，已裁切」。
 
     解析策略（三層防護）：
     1. json.loads() 直接解析 JSON 物件
     2. regex 找出 { ... } 子串後解析
-    3. 全部失敗 → 回傳空的 _EMPTY_CATEGORIES（不崩潰）
+    3. 全部失敗 → 使用空的 _EMPTY_CATEGORIES
+    最後一律經過 _trim_questions_to_limit() 做總量保險裁切。
     """
     client = anthropic.Anthropic(api_key=API_KEY)
 
@@ -537,14 +576,20 @@ cat_5_decision（決策障礙類）：
 - 每道題格式：「Q數字. 客戶說的話 👉 建議回答方向：具體建議」
 - 客戶問題必須是客戶會說的話，不是產品說明
 - 建議回答方向必須根據文件的真實資訊撰寫，不要憑空捏造
-- 每個類別最多5題，最少0題
+- 全部5個類別「加總」最多{TOTAL_LIMIT}題，各類別彼此之間不設個別上限，
+  完全由你依材料在各類別的豐富程度智能分配（某類別材料特別豐富可以多分配
+  幾題，某類別材料稀薄就少分配甚至回傳空陣列）
 - 沒有足夠素材的類別請回傳空陣列 []
-"""
+- 品質優先於數量：絕對禁止為了「湊到{TOTAL_LIMIT}題」而生成語意重複、只是
+  換句話說的相似題目，也絕對禁止為了展示自己能生成很多題目而降低出題標準。
+  每一題都必須通過前面「自我檢查」段落的標準，寧可總數只有一半但每題都
+  高品質，也不要硬湊滿但其中有多題重複或牽強
+""".replace("{TOTAL_LIMIT}", str(TOTAL_QUESTION_LIMIT))
 
     response = client.messages.create(
         model="claude-sonnet-5",
         thinking={"type": "disabled"},
-        max_tokens=4096,
+        max_tokens=8192,
         system=system_prompt,
         messages=[{"role": "user", "content": f"以下是教材內容：\n\n{document_text}"}]
     )
@@ -555,6 +600,8 @@ cat_5_decision（決策障礙類）：
     cleaned = re.sub(r'```', '', cleaned)
     cleaned = cleaned.strip()
 
+    parsed_result = None
+
     # ── 第一層：直接 json.loads 解析 ────────────────
     try:
         result = json.loads(cleaned)
@@ -563,40 +610,50 @@ cat_5_decision（決策障礙類）：
                 if key not in result:
                     result[key] = []
             print(f"[DEBUG] 解析成功！各類別題數：{ {k: len(v) for k, v in result.items()} }")
-            return result
+            parsed_result = result
     except (json.JSONDecodeError, ValueError):
         pass
 
     # ── 第二層：找出 { } 子字串再解析 ───────────────
-    try:
-        start = cleaned.index("{")
-        end   = cleaned.rindex("}") + 1
-        result = json.loads(cleaned[start:end])
-        if isinstance(result, dict):
-            for key in _EMPTY_CATEGORIES:
-                if key not in result:
-                    result[key] = []
-            print("[DEBUG] 第二層解析成功")
-            return result
-    except (ValueError, json.JSONDecodeError):
-        pass
+    if parsed_result is None:
+        try:
+            start = cleaned.index("{")
+            end   = cleaned.rindex("}") + 1
+            result = json.loads(cleaned[start:end])
+            if isinstance(result, dict):
+                for key in _EMPTY_CATEGORIES:
+                    if key not in result:
+                        result[key] = []
+                print("[DEBUG] 第二層解析成功")
+                parsed_result = result
+        except (ValueError, json.JSONDecodeError):
+            pass
 
     # ── 第三層：逐類別用 regex 提取各陣列 ───────────
-    try:
-        result = dict(_EMPTY_CATEGORIES)
-        for cat_key in _EMPTY_CATEGORIES:
-            pattern = rf'"{cat_key}"\s*:\s*(\[.*?\])'
-            match = re.search(pattern, cleaned, re.DOTALL)
-            if match:
-                result[cat_key] = json.loads(match.group(1))
-        if any(len(v) > 0 for v in result.values()):
-            print("[DEBUG] 第三層解析成功")
-            return result
-    except Exception:
-        pass
+    if parsed_result is None:
+        try:
+            result = dict(_EMPTY_CATEGORIES)
+            for cat_key in _EMPTY_CATEGORIES:
+                pattern = rf'"{cat_key}"\s*:\s*(\[.*?\])'
+                match = re.search(pattern, cleaned, re.DOTALL)
+                if match:
+                    result[cat_key] = json.loads(match.group(1))
+            if any(len(v) > 0 for v in result.values()):
+                print("[DEBUG] 第三層解析成功")
+                parsed_result = result
+        except Exception:
+            pass
 
-    print("[DEBUG] 所有解析失敗")
-    return dict(_EMPTY_CATEGORIES)
+    if parsed_result is None:
+        print("[DEBUG] 所有解析失敗")
+        parsed_result = dict(_EMPTY_CATEGORIES)
+
+    # ── 程式碼層保險：無論AI是否確實遵守總數上限，這裡實際加總並視需要裁切 ──
+    trimmed_result, trim_meta = _trim_questions_to_limit(parsed_result, TOTAL_QUESTION_LIMIT)
+    if trim_meta["was_trimmed"]:
+        print(f"[DEBUG] 題目超過上限，已從 {trim_meta['total_generated']} 題裁切為 {trim_meta['total_kept']} 題")
+
+    return trimmed_result, trim_meta
 
 
 def parse_analysis_and_questions(full_response: str) -> tuple[str, list[str]]:

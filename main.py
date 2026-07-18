@@ -329,6 +329,11 @@ if tab1 is not None:
             label_visibility="collapsed"
         )
         st.markdown('<p class="upload-hint">📎 支援格式：PDF　｜　建議大小：10MB 以內</p>', unsafe_allow_html=True)
+        st.caption(
+            f"💡 單次上傳最多生成 {TOTAL_QUESTION_LIMIT} 道題目（不分類別個別上限，"
+            f"AI 會依材料豐富度智能分配）。若您的產品資料非常豐富，建議拆分成多份文件"
+            f"分次上傳，以確保題目品質與涵蓋度。"
+        )
         st.markdown("---")
         st.markdown("#### 🎯 出題模式設定")
 
@@ -412,8 +417,8 @@ if tab1 is not None:
                     else:
                         # 第一階段：產出三大重點分析（Markdown）
                         main_analysis = analyze_with_claude(document_text)
-                        # 第二階段：按 5 大類別各生成 5 道題，共 25 道（三層防護解析）
-                        questions_dict = generate_questions_json(document_text)
+                        # 第二階段：按 5 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
+                        questions_dict, question_gen_meta = generate_questions_json(document_text)
 
                         # 合併為扁平 list，供現有的 UI/邏輯向下相容
                         all_questions: list[str] = []
@@ -445,6 +450,18 @@ if tab1 is not None:
                         st.session_state["product_name"]     = product_name
                         st.session_state["product_benefits"] = extract_section(main_analysis, "📌")
                         st.session_state["target_audience"]  = extract_section(main_analysis, "🎯")
+
+                        # AI 萃取完成提示：讓使用者知道這次實際生成了幾題，
+                        # 若材料豐富度超過單次上限，也要讓使用者知道發生了裁切，而不是無聲少題
+                        st.success(f"✅ AI 萃取完成，本次共生成 {question_gen_meta['total_kept']} 道題目")
+                        if question_gen_meta["was_trimmed"]:
+                            st.warning(
+                                f"⚠️ 這份文件的材料非常豐富，AI 原本想生成 "
+                                f"{question_gen_meta['total_generated']} 題，但單次上傳上限是 "
+                                f"{TOTAL_QUESTION_LIMIT} 題，已為您保留前 {TOTAL_QUESTION_LIMIT} 題。"
+                                f"建議將這份文件剩餘的內容拆成下一份文件另外上傳，"
+                                f"以涵蓋更完整的題目。"
+                            )
 
                         # 清除舊的考題 widget 狀態
                         for i in range(15):

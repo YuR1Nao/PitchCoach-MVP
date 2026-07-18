@@ -12,6 +12,11 @@ OPENAI_API_KEY  = os.environ.get("OPENAI_API_KEY")
 
 REQUIRED_SELECTION = 2
 
+# AI 萃取題目：單次上傳（單一PDF）最多生成的題目總數，不分類別個別上限，
+# 由AI依材料在各類別的豐富程度智能分配。若上傳材料的題目量很大（例如整份
+# 90題的文件），建議拆分成多份文件分次上傳，每次都各自享有這個上限。
+TOTAL_QUESTION_LIMIT = 30
+
 CATEGORY_LABELS = {
     "cat_1_product":     "🔍 第一類：產品理解",
     "cat_2_price":       "💰 第二類：價格異議",
