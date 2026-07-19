@@ -43,6 +43,14 @@ if "authenticated" not in st.session_state:
     st.session_state["current_company"] = ""
     st.session_state["company_id"] = ""
 
+# custom_questions（主管自訂考題）在多個地方會被讀取/寫入（企業中控台、
+# 員工實戰沙盒都有用到），原本的初始化只寫在員工端那個區塊裡，如果主管
+# 在還沒進過員工分頁的全新session就先按「新增」，會因為這個key還不存在
+# 而觸發 KeyError。搬到這裡確保腳本一開始就一定會初始化好，不管哪個分頁
+# 先執行到都不會出錯。
+if "custom_questions" not in st.session_state:
+    st.session_state["custom_questions"] = []
+
 if not st.session_state["authenticated"]:
     _view = st.query_params.get("view", "")
 
