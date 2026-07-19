@@ -591,21 +591,30 @@ if tab1 is not None:
                     # ── 主管自訂考題 ──────────────────────
                     st.markdown("---")
                     st.markdown("#### ✏️ 主管自訂考題")
-                    st.caption("AI 沒有出到的問題，可以在這裡手動新增。")
+                    st.caption(
+                        "AI 沒有出到的問題，可以在這裡手動新增。「建議回答方向」欄位可留空，"
+                        "但填寫後這道題才會有教練提示與評分依據，品質才會跟 AI 出的題一致，"
+                        "強烈建議填寫。"
+                    )
 
-                    col_input, col_btn = st.columns([0.82, 0.18])
-                    with col_input:
-                        new_q = st.text_input(
-                            label="輸入自訂考題",
-                            placeholder="例如：你們的產品跟市面上的有什麼不同？",
-                            key="new_custom_q_input",
-                            label_visibility="collapsed"
-                        )
-                    with col_btn:
-                        if st.button("➕ 新增", use_container_width=True):
-                            if new_q.strip():
-                                st.session_state["custom_questions"].append(new_q.strip())
-                                st.rerun()
+                    new_q = st.text_input(
+                        label="題目",
+                        placeholder="例如：你們的產品跟市面上的有什麼不同？",
+                        key="new_custom_q_input",
+                    )
+                    new_q_hint = st.text_area(
+                        label="建議回答方向（選填，但強烈建議填寫）",
+                        placeholder="例如：說明產品的獨家成分與認證，並舉出跟競品的具體差異",
+                        key="new_custom_q_hint_input",
+                        height=80,
+                    )
+                    if st.button("➕ 新增", key="add_custom_main"):
+                        if new_q.strip():
+                            _combined_q = new_q.strip()
+                            if new_q_hint.strip():
+                                _combined_q += f" 👉 建議回答方向：{new_q_hint.strip()}"
+                            st.session_state["custom_questions"].append(_combined_q)
+                            st.rerun()
 
                     if st.session_state.get("custom_questions"):
                         st.caption("以下題目歸類為「✏️ 主管自訂類」，會與 AI 題目一起發布並可被隨機抽中。")
@@ -735,21 +744,30 @@ if tab1 is not None:
                     # ── 主管自訂考題 ──────────────────────
                     st.markdown("---")
                     st.markdown("#### ✏️ 主管自訂考題")
-                    st.caption("AI 沒有出到的問題，可以在這裡手動新增。")
+                    st.caption(
+                        "AI 沒有出到的問題，可以在這裡手動新增。「建議回答方向」欄位可留空，"
+                        "但填寫後這道題才會有教練提示與評分依據，品質才會跟 AI 出的題一致，"
+                        "強烈建議填寫。"
+                    )
 
-                    col_input_r, col_btn_r = st.columns([0.82, 0.18])
-                    with col_input_r:
-                        new_q_r = st.text_input(
-                            label="輸入自訂考題（隨機模式）",
-                            placeholder="例如：你們的產品跟市面上的有什麼不同？",
-                            key="new_custom_q_input_random",
-                            label_visibility="collapsed"
-                        )
-                    with col_btn_r:
-                        if st.button("➕ 新增", use_container_width=True, key="add_custom_random"):
-                            if new_q_r.strip():
-                                st.session_state["custom_questions"].append(new_q_r.strip())
-                                st.rerun()
+                    new_q_r = st.text_input(
+                        label="題目（隨機模式）",
+                        placeholder="例如：你們的產品跟市面上的有什麼不同？",
+                        key="new_custom_q_input_random",
+                    )
+                    new_q_hint_r = st.text_area(
+                        label="建議回答方向（選填，但強烈建議填寫）",
+                        placeholder="例如：說明產品的獨家成分與認證，並舉出跟競品的具體差異",
+                        key="new_custom_q_hint_input_random",
+                        height=80,
+                    )
+                    if st.button("➕ 新增", key="add_custom_random"):
+                        if new_q_r.strip():
+                            _combined_q_r = new_q_r.strip()
+                            if new_q_hint_r.strip():
+                                _combined_q_r += f" 👉 建議回答方向：{new_q_hint_r.strip()}"
+                            st.session_state["custom_questions"].append(_combined_q_r)
+                            st.rerun()
 
                     if st.session_state.get("custom_questions"):
                         for ci, cq in enumerate(st.session_state["custom_questions"]):
