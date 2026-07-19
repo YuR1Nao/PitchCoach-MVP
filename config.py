@@ -24,6 +24,7 @@ CATEGORY_LABELS = {
     "cat_4_competition": "⚔️ 第四類：競品比較",
     "cat_5_decision":    "🚪 第五類：決策障礙",
     "cat_org_trust":     "🏢 第六類：組織與商業模式疑慮",
+    "cat_rules_info":    "📖 第七類：規則與資格說明",
 }
 
 EDGE_TTS_VOICE = "zh-TW-HsiaoChenNeural"

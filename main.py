@@ -425,7 +425,7 @@ if tab1 is not None:
                     else:
                         # 第一階段：產出三大重點分析（Markdown）
                         main_analysis = analyze_with_claude(document_text)
-                        # 第二階段：按 6 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
+                        # 第二階段：按 7 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
                         questions_dict, question_gen_meta = generate_questions_json(document_text)
 
                         # 合併為扁平 list，供現有的 UI/邏輯向下相容
@@ -687,6 +687,7 @@ if tab1 is not None:
                             "cat_4_competition": "⚔️ 競品比較類",
                             "cat_5_decision":    "🚪 決策障礙類",
                             "cat_org_trust":     "🏢 組織與商業模式疑慮類",
+                            "cat_rules_info":    "📖 規則與資格說明類",
                             "cat_6_custom":      "✏️ 主管自訂類",
                         }
                         for cat_key, cat_label in cat_labels_short.items():
