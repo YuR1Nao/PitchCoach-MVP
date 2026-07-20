@@ -328,6 +328,26 @@ if tab1 is not None:
                                 st.session_state.pop(_k, None)
                             st.success("✅ 已刪除，題庫已更新")
                             st.rerun()
+
+                # 可展開查看「這份文件自己」生成的題目（依分類整理）
+                with st.expander(f"👁️ 查看「{_pdf.get('filename', '未命名')}」自己的題目"):
+                    _pdf_qbc = _pdf.get("questions_by_category") or {}
+                    if not any(_pdf_qbc.values()):
+                        st.caption("這份文件沒有生成任何題目。")
+                    else:
+                        for _cat_key, _cat_label in CATEGORY_LABELS.items():
+                            _cat_qs = _pdf_qbc.get(_cat_key, [])
+                            if not _cat_qs:
+                                continue
+                            st.markdown(f"**{_cat_label}**（{len(_cat_qs)}題）")
+                            for _q in _cat_qs:
+                                if "👉" in _q:
+                                    _q_disp, _q_hint = _q.split("👉", 1)
+                                else:
+                                    _q_disp, _q_hint = _q, ""
+                                st.markdown(f"- {_q_disp.strip()}")
+                                if _q_hint.strip():
+                                    st.caption(f"　👉{_q_hint.strip()}")
             st.markdown("---")
 
         st.markdown("### 📂 上傳教材文件")
@@ -426,8 +446,22 @@ if tab1 is not None:
                     else:
                         # 第一階段：產出三大重點分析（Markdown）
                         main_analysis = analyze_with_claude(document_text)
+
+                        # 抓取目前已存在的題目（只抓題目本身），傳給AI避免生成
+                        # 重複題目。用新鮮查詢直接問Supabase，不依賴session state，
+                        # 確保拿到的是當下真實、完整的題庫（不受session快取影響）。
+                        _existing_rows_for_dedup = get_all_training_sets(
+                            get_or_create_company(st.session_state.get("current_company", ""))
+                        )
+                        _existing_questions_flat = []
+                        for _erow in _existing_rows_for_dedup:
+                            for _eqs in (_erow.get("questions_by_category") or {}).values():
+                                _existing_questions_flat.extend(_eqs)
+
                         # 第二階段：按 7 大類別智能生成題目，加總最多 TOTAL_QUESTION_LIMIT 題（三層防護解析）
-                        questions_dict, question_gen_meta = generate_questions_json(document_text)
+                        questions_dict, question_gen_meta = generate_questions_json(
+                            document_text, existing_questions=_existing_questions_flat
+                        )
 
                         # 合併為扁平 list，供現有的 UI/邏輯向下相容
                         all_questions: list[str] = []

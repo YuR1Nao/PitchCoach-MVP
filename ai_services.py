@@ -477,7 +477,7 @@ def _trim_questions_to_limit(questions_dict: dict, limit: int = TOTAL_QUESTION_L
     return trimmed, meta
 
 
-def generate_questions_json(document_text: str) -> tuple[dict, dict]:
+def generate_questions_json(document_text: str, existing_questions: list = None) -> tuple[dict, dict]:
     """
     第二次 API 呼叫：按 7 大類別智能生成考題（其中6類是模擬客戶疑慮/反對
     的刁難考題，1類是中性、不帶負面情緒的規則詢問），
@@ -512,6 +512,33 @@ def generate_questions_json(document_text: str) -> tuple[dict, dict]:
     """
     client = anthropic.Anthropic(api_key=API_KEY)
 
+    # 組出「避免重複」提示區塊：只取既有題目裡「題目本身」（👉之前的部分），
+    # 不含建議回答方向，保持prompt精簡。沒有既有題目時（例如公司第一次上傳）
+    # 這段會是空字串，system_prompt裡對應的位置也會自然變成空白，不影響出題。
+    existing_block = ""
+    if existing_questions:
+        _existing_q_only = []
+        for _q in existing_questions:
+            _q_part = _q.split("👉")[0].strip()
+            if _q_part:
+                _existing_q_only.append(_q_part)
+        if _existing_q_only:
+            _existing_list_str = "\n".join(f"- {q}" for q in _existing_q_only)
+            existing_block = f"""
+【避免重複】
+以下是這家公司題庫裡已經存在的題目（只列出題目本身，不含建議回答方向），
+生成新題目時請參考：
+{_existing_list_str}
+
+- 如果新題目問法跟上面任何一題幾乎一模一樣（只是換了幾個字、語序調整、
+  同義詞替換），視為重複，不要生成
+- 如果新題目雖然討論同一個疑慮方向，但用了不同的情境、不同的具體細節、
+  或不同的切入角度來問，仍然算是有效的新題目，可以生成——不需要因為
+  「主題聽起來類似」就跳過，只擋「幾乎照抄」的重複
+- 如果這份文件裡沒有任何真正新的素材、內容全部跟既有題目重複，該類別
+  可以回傳空陣列 []，不用勉強湊題
+"""
+
     system_prompt = """你是一個專業的銷售訓練專家。
 請根據文件內容，為以下7個類別智能判斷並生成考題。
 
@@ -524,7 +551,7 @@ def generate_questions_json(document_text: str) -> tuple[dict, dict]:
 - 除了 cat_rules_info 以外的6個類別，題目應該帶有疑慮、反對、或挑戰意味；
   cat_rules_info 則相反，題目應該是中性、單純好奇的規則/資格詢問，不要為
   了讓題目「聽起來像刁難」而刻意加入負面情緒，這類題目一樣重要
-
+{EXISTING_QUESTIONS_BLOCK}
 【強制輸出格式】
 你的整個回覆必須是一個合法的JSON物件：
 {
@@ -632,7 +659,7 @@ cat_3_trust
   換句話說的相似題目，也絕對禁止為了展示自己能生成很多題目而降低出題標準。
   每一題都必須通過前面「自我檢查」段落的標準，寧可總數只有一半但每題都
   高品質，也不要硬湊滿但其中有多題重複或牽強
-""".replace("{TOTAL_LIMIT}", str(TOTAL_QUESTION_LIMIT))
+""".replace("{TOTAL_LIMIT}", str(TOTAL_QUESTION_LIMIT)).replace("{EXISTING_QUESTIONS_BLOCK}", existing_block)
 
     response = client.messages.create(
         model="claude-sonnet-5",
