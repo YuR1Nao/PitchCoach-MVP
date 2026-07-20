@@ -17,7 +17,7 @@ load_dotenv()
 
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
-                      save_training_set_file,
+                      save_training_set_file, update_training_set_question,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
                       set_company_credentials, create_employee_account, list_all_companies)
@@ -770,26 +770,86 @@ if tab1 is not None:
 
                         for cat_key, cat_label in cat_labels_short.items():
                             _cat_file_groups = [
-                                (r.get("filename", "未命名"),
+                                (r.get("id"), r.get("filename", "未命名"),
                                  (r.get("questions_by_category") or {}).get(cat_key, []))
                                 for r in _active_rows_for_preview
                             ]
-                            _cat_file_groups = [(fn, qs) for fn, qs in _cat_file_groups if qs]
+                            _cat_file_groups = [(rid, fn, qs) for rid, fn, qs in _cat_file_groups if qs]
                             if not _cat_file_groups:
                                 continue
-                            _cat_total_qs = sum(len(qs) for _, qs in _cat_file_groups)
+                            _cat_total_qs = sum(len(qs) for _, _, qs in _cat_file_groups)
                             with st.expander(f"{cat_label}（{_cat_total_qs} 題）", expanded=False):
-                                for _fn, _qs in _cat_file_groups:
+                                for _rid, _fn, _qs in _cat_file_groups:
                                     st.markdown(f"**── 📄 來自：{_fn} ──**")
-                                    for _q in _qs:
+                                    for _qi, _q in enumerate(_qs):
                                         if "👉" in _q:
                                             _q_disp, _q_hint = _q.split("👉", 1)
                                             _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
                                         else:
                                             _q_disp, _q_hint = _q, ""
-                                        st.markdown(f"- {_q_disp.strip()}")
-                                        if _q_hint.strip():
-                                            st.caption(f"　👉{_q_hint.strip()}")
+
+                                        _edit_key = f"qedit_mode_{_rid}_{cat_key}_{_qi}"
+                                        _delc_key = f"qdel_confirm_{_rid}_{cat_key}_{_qi}"
+
+                                        if st.session_state.get(_edit_key, False):
+                                            # ── 編輯模式 ──
+                                            _new_q_disp = st.text_input(
+                                                "題目", value=_q_disp.strip(),
+                                                key=f"qedit_text_{_rid}_{cat_key}_{_qi}"
+                                            )
+                                            _new_q_hint = st.text_area(
+                                                "建議回答方向", value=_q_hint.strip(),
+                                                key=f"qedit_hint_{_rid}_{cat_key}_{_qi}", height=68
+                                            )
+                                            _col_save, _col_cancel = st.columns(2)
+                                            with _col_save:
+                                                if st.button("💾 儲存", key=f"qedit_save_{_rid}_{cat_key}_{_qi}",
+                                                             use_container_width=True):
+                                                    _combined = _new_q_disp.strip()
+                                                    if _new_q_hint.strip():
+                                                        _combined += f" 👉 建議回答方向：{_new_q_hint.strip()}"
+                                                    if update_training_set_question(_rid, cat_key, _qi, new_text=_combined):
+                                                        st.session_state[_edit_key] = False
+                                                        st.success("✅ 已更新")
+                                                        st.rerun()
+                                            with _col_cancel:
+                                                if st.button("✖️ 取消", key=f"qedit_cancel_{_rid}_{cat_key}_{_qi}",
+                                                             use_container_width=True):
+                                                    st.session_state[_edit_key] = False
+                                                    st.rerun()
+                                        elif st.session_state.get(_delc_key, False):
+                                            # ── 刪除確認模式 ──
+                                            st.warning(f"⚠️ 確定要刪除這一題嗎？「{_q_disp.strip()[:40]}」")
+                                            _col_confirm, _col_cancel2 = st.columns(2)
+                                            with _col_confirm:
+                                                if st.button("🗑️ 確認刪除", key=f"qdel_confirmbtn_{_rid}_{cat_key}_{_qi}",
+                                                             use_container_width=True):
+                                                    if update_training_set_question(_rid, cat_key, _qi, delete=True):
+                                                        st.session_state[_delc_key] = False
+                                                        st.success("✅ 已刪除")
+                                                        st.rerun()
+                                            with _col_cancel2:
+                                                if st.button("取消", key=f"qdel_cancelbtn_{_rid}_{cat_key}_{_qi}",
+                                                             use_container_width=True):
+                                                    st.session_state[_delc_key] = False
+                                                    st.rerun()
+                                        else:
+                                            # ── 一般顯示模式 ──
+                                            _col_q, _col_edit, _col_del = st.columns([0.82, 0.09, 0.09])
+                                            with _col_q:
+                                                st.markdown(f"- {_q_disp.strip()}")
+                                                if _q_hint.strip():
+                                                    st.caption(f"　👉{_q_hint.strip()}")
+                                            with _col_edit:
+                                                if st.button("✏️", key=f"qedit_btn_{_rid}_{cat_key}_{_qi}"):
+                                                    st.session_state.pop(f"qedit_text_{_rid}_{cat_key}_{_qi}", None)
+                                                    st.session_state.pop(f"qedit_hint_{_rid}_{cat_key}_{_qi}", None)
+                                                    st.session_state[_edit_key] = True
+                                                    st.rerun()
+                                            with _col_del:
+                                                if st.button("🗑️", key=f"qdel_btn_{_rid}_{cat_key}_{_qi}"):
+                                                    st.session_state[_delc_key] = True
+                                                    st.rerun()
                                     st.markdown("")
 
                         if st.session_state.get("custom_questions"):

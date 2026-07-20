@@ -175,6 +175,57 @@ def save_training_set_file(company_id: str, filename: str, questions_by_category
         return False
 
 
+def update_training_set_question(training_set_id: str, category_key: str, question_index: int,
+                                   new_text: str = None, delete: bool = False) -> bool:
+    """
+    更新或刪除某一筆 training_sets 紀錄裡，指定分類、指定索引位置的單一題目。
+
+    new_text 有值時：把該位置的題目文字整個替換成 new_text（呼叫端應組好完整格式
+    「題目 👉 建議回答方向：答案」再傳進來）。
+    delete=True 時：把該位置的題目從陣列中移除。
+    兩者互斥，只會執行其中一種操作。
+
+    因為 questions_by_category 是一個「值為陣列」的巢狀 JSON 結構，Supabase
+    沒辦法直接更新陣列裡的單一元素，所以做法是：先把整份 questions_by_category
+    抓下來、在 Python 裡改好，再整份寫回去。同時重新展平 questions 欄位，
+    確保這筆紀錄裡的兩個欄位彼此保持一致，不會各自代表不同版本的內容。
+    """
+    try:
+        sb = get_supabase()
+        result = sb.table("training_sets").select(
+            "questions_by_category"
+        ).eq("id", training_set_id).execute()
+        if not result.data:
+            return False
+
+        qbc = result.data[0].get("questions_by_category") or {}
+        cat_qs = list(qbc.get(category_key, []))
+        if question_index < 0 or question_index >= len(cat_qs):
+            return False
+
+        if delete:
+            cat_qs.pop(question_index)
+        elif new_text is not None:
+            cat_qs[question_index] = new_text
+        else:
+            return False
+        qbc[category_key] = cat_qs
+
+        flat_questions = []
+        for qs in qbc.values():
+            flat_questions.extend(qs)
+
+        sb.table("training_sets").update({
+            "questions_by_category": qbc,
+            "questions": flat_questions,
+        }).eq("id", training_set_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"⚠️ 更新題目失敗：{str(e)}")
+        print(f"[Supabase警告] update_training_set_question 失敗：{e}")
+        return False
+
+
 def save_settings() -> None:
     """
     將目前的任務發布設定（已選定的2題、客戶情境）同步更新到這家公司
