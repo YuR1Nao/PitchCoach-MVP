@@ -314,9 +314,12 @@ if tab1 is not None:
                     )
                     if _new_state != _is_active:
                         if toggle_training_set_active(_pdf["id"], _new_state):
+                            # 連 settings_loaded 一起清掉，強制下一次重新執行時
+                            # 重新從 Supabase 完整同步，而不是只清空記憶體卻沒有
+                            # 任何機制補回正確資料
                             for _k in ["questions", "questions_by_category",
                                        "analyzed_filename", "task_published",
-                                       "published_questions"]:
+                                       "published_questions", "settings_loaded"]:
                                 st.session_state.pop(_k, None)
                             st.rerun()
                 with _col_del:
@@ -324,7 +327,7 @@ if tab1 is not None:
                         if delete_training_set(_pdf["id"]):
                             for _k in ["questions", "questions_by_category",
                                        "analyzed_filename", "task_published",
-                                       "published_questions"]:
+                                       "published_questions", "settings_loaded"]:
                                 st.session_state.pop(_k, None)
                             st.success("✅ 已刪除，題庫已更新")
                             st.rerun()
