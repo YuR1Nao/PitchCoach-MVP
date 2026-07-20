@@ -137,9 +137,52 @@ def toggle_training_set_active(training_set_id: str, is_active: bool) -> bool:
         return False
 
 
+def save_training_set_file(company_id: str, filename: str, questions_by_category: dict,
+                            questions: list, product_name: str = "", main_analysis: str = "",
+                            product_benefits: str = "", target_audience: str = "") -> bool:
+    """
+    儲存「單一份」PDF 自己的萃取結果為一筆獨立的 training_sets 紀錄。
+
+    每次上傳新PDF、AI萃取完成後應立即呼叫這個函式，只存這份文件自己的
+    題目，絕對不要存累積合併後的題庫——「累積」這件事只應該發生在讀取端
+    （load_settings / get_company_training_material 已經是正確的合併邏輯，
+    會把公司底下所有啟用中的紀錄逐筆加總），寫入端如果也存累積後的內容，
+    兩邊疊加會造成題目重複膨脹。
+    """
+    if not company_id:
+        st.warning("⚠️ 尚未取得公司身份，無法儲存教材")
+        return False
+    try:
+        sb = get_supabase()
+        sb.table("training_sets").insert({
+            "company_id":            company_id,
+            "filename":              filename,
+            "product_name":          product_name,
+            "main_analysis":         main_analysis,
+            "product_benefits":      product_benefits,
+            "target_audience":       target_audience,
+            "questions":             questions,
+            "published_questions":   [],
+            "customer_scenario":     "",
+            "questions_by_category": questions_by_category,
+            "is_published":          True,
+            "is_active":             True,
+        }).execute()
+        print(f"[Supabase] training_sets 儲存成功（單一文件：{filename}）")
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Supabase 儲存失敗：{str(e)}，請重新嘗試上傳")
+        return False
+
+
 def save_settings() -> None:
     """
-    將本次上傳/發布的訓練集資料同步至 Supabase training_sets 資料表。
+    將目前的任務發布設定（已選定的2題、客戶情境）同步更新到這家公司
+    所有的 training_sets 紀錄上。
+
+    這裡是 update（不是 insert）：每份PDF自己的題目內容已經在上傳當下
+    由 save_training_set_file() 各自存成獨立一筆，這裡不應該再重複寫入
+    整包題庫，只需要更新「發布任務」這個公司層級的設定即可。
     """
     company_id = st.session_state.get("company_id", "")
     if not company_id:
@@ -148,20 +191,12 @@ def save_settings() -> None:
 
     try:
         sb = get_supabase()
-        sb.table("training_sets").insert({
-            "company_id":            company_id,
-            "filename":              st.session_state.get("analyzed_filename", ""),
-            "product_name":          st.session_state.get("product_name", ""),
-            "main_analysis":         st.session_state.get("main_analysis", ""),
-            "product_benefits":      st.session_state.get("product_benefits", ""),
-            "target_audience":       st.session_state.get("target_audience", ""),
-            "questions":             st.session_state.get("questions", []),
+        sb.table("training_sets").update({
             "published_questions":   st.session_state.get("published_questions", []),
             "customer_scenario":     st.session_state.get("customer_scenario", ""),
-            "questions_by_category": st.session_state.get("questions_by_category", {}),
-            "is_published":          True
-        }).execute()
-        print("[Supabase] training_sets 儲存成功")
+            "is_published":          True,
+        }).eq("company_id", company_id).execute()
+        print("[Supabase] 任務發布設定更新成功")
     except Exception as e:
         st.error(f"⚠️ Supabase 儲存失敗：{str(e)}，請重新嘗試發布")
 

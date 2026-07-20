@@ -17,6 +17,7 @@ load_dotenv()
 
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
+                      save_training_set_file,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
                       set_company_credentials, create_employee_account, list_all_companies)
@@ -458,6 +459,21 @@ if tab1 is not None:
                         st.session_state["product_name"]     = product_name
                         st.session_state["product_benefits"] = extract_section(main_analysis, "📌")
                         st.session_state["target_audience"]  = extract_section(main_analysis, "🎯")
+
+                        # 立即把「這份文件自己的」萃取結果存成一筆獨立的資料庫紀錄，
+                        # 只包含這次上傳的內容，不是累積後的整包題庫——避免上傳第2、
+                        # 第3份文件時，把前面文件的題目也一併重複存進來造成資料膨脹。
+                        # 「累積顯示」這件事只應該發生在讀取端。
+                        save_training_set_file(
+                            company_id=st.session_state.get("company_id", ""),
+                            filename=uploaded_file.name,
+                            questions_by_category=questions_dict,
+                            questions=all_questions,
+                            product_name=product_name,
+                            main_analysis=main_analysis,
+                            product_benefits=st.session_state["product_benefits"],
+                            target_audience=st.session_state["target_audience"],
+                        )
 
                         # AI 萃取完成提示：讓使用者知道這次實際生成了幾題，
                         # 若材料豐富度超過單次上限，也要讓使用者知道發生了裁切，而不是無聲少題
