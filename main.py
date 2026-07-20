@@ -1060,20 +1060,30 @@ if tab2 is not None:
                 questions_by_category = st.session_state.get("questions_by_category", {})
 
                 if questions_by_category:
-                    # 從有題目的類別中隨機選 2 個不同類別，各抽 1 題
-                    available_cats = [
-                        cat for cat, qs in questions_by_category.items() if qs
+                    # 優先：找出「題目數 >= 2」的類別，隨機選一個，從裡面抽兩題，
+                    # 讓同一次對話圍繞同一個主題（同理心+溝通溫度都在講同一件事），
+                    # 避免員工在不相關的疑慮之間跳來跳去、練不出對話的連貫感
+                    rich_cats = [
+                        cat for cat, qs in questions_by_category.items() if len(qs) >= 2
                     ]
-                    if len(available_cats) >= 2:
-                        selected_cats = random.sample(available_cats, 2)
-                        randomly_selected = [
-                            random.choice(questions_by_category[cat])
-                            for cat in selected_cats
-                        ]
+                    if rich_cats:
+                        selected_cat = random.choice(rich_cats)
+                        randomly_selected = random.sample(questions_by_category[selected_cat], 2)
                     else:
-                        # 類別不足時，從所有題目中隨機抽 2 題（舊版相容）
-                        all_q = st.session_state.get("questions", [])
-                        randomly_selected = random.sample(all_q, min(2, len(all_q)))
+                        # 備援一：沒有任何類別題目數 >= 2，退回跨類別各抽 1 題
+                        available_cats = [
+                            cat for cat, qs in questions_by_category.items() if qs
+                        ]
+                        if len(available_cats) >= 2:
+                            selected_cats = random.sample(available_cats, 2)
+                            randomly_selected = [
+                                random.choice(questions_by_category[cat])
+                                for cat in selected_cats
+                            ]
+                        else:
+                            # 備援二：類別也不足，從所有題目中隨機抽 2 題
+                            all_q = st.session_state.get("questions", [])
+                            randomly_selected = random.sample(all_q, min(2, len(all_q)))
                 else:
                     # 無分類資料（舊版）：從扁平列表中隨機抽 2 題
                     all_q = st.session_state.get("questions", [])
