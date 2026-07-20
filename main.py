@@ -332,25 +332,6 @@ if tab1 is not None:
                             st.success("✅ 已刪除，題庫已更新")
                             st.rerun()
 
-                # 可展開查看「這份文件自己」生成的題目（依分類整理）
-                with st.expander(f"👁️ 查看「{_pdf.get('filename', '未命名')}」自己的題目"):
-                    _pdf_qbc = _pdf.get("questions_by_category") or {}
-                    if not any(_pdf_qbc.values()):
-                        st.caption("這份文件沒有生成任何題目。")
-                    else:
-                        for _cat_key, _cat_label in CATEGORY_LABELS.items():
-                            _cat_qs = _pdf_qbc.get(_cat_key, [])
-                            if not _cat_qs:
-                                continue
-                            st.markdown(f"**{_cat_label}**（{len(_cat_qs)}題）")
-                            for _q in _cat_qs:
-                                if "👉" in _q:
-                                    _q_disp, _q_hint = _q.split("👉", 1)
-                                else:
-                                    _q_disp, _q_hint = _q, ""
-                                st.markdown(f"- {_q_disp.strip()}")
-                                if _q_hint.strip():
-                                    st.caption(f"　👉{_q_hint.strip()}")
             st.markdown("---")
 
         st.markdown("### 📂 上傳教材文件")
@@ -728,57 +709,31 @@ if tab1 is not None:
                 if total_q == 0:
                     st.info("ℹ️ 無法自動解析考題格式，請重新執行 AI 萃取。")
                 else:
-                    questions_by_category = dict(st.session_state.get("questions_by_category", {}))
-                    if st.session_state.get("custom_questions"):
-                        questions_by_category["cat_6_custom"] = st.session_state["custom_questions"]
+                    # 即時向 Supabase 查詢目前所有「啟用中」文件的題目，依「類別 →
+                    # 來源文件」兩層分組顯示，不再依賴瀏覽器記憶體裡的
+                    # questions_by_category（那份資料在切換啟用狀態、刪除文件、
+                    # 或多次上傳之間可能沒有即時同步，改成每次都直接問資料庫拿
+                    # 當下真實狀態，畫面就不會再跟實際資料不一致）。
+                    _company_id_for_preview = get_or_create_company(
+                        st.session_state.get("current_company", "")
+                    )
+                    _all_rows_for_preview = get_all_training_sets(_company_id_for_preview)
+                    _active_rows_for_preview = [
+                        r for r in _all_rows_for_preview if r.get("is_active", True)
+                    ]
 
-                    if questions_by_category:
-                        # ── 有分類資料：按類別摘要顯示（可折疊）────────────
-                        total_count = sum(len(qs) for qs in questions_by_category.values())
-                        # 動態計算「實際有題目的類別數」，不寫死5或6，
-                        # 之後不管新增/移除分類，這裡都會自動反映正確數字
-                        active_cat_count = sum(1 for qs in questions_by_category.values() if qs)
-                        st.success(
-                            f"✅ 題庫共 {total_count} 題，分為 {active_cat_count} 大類別，"
-                            f"系統每次從不同類別各抽 1 題（共 2 題）。"
-                        )
-                        cat_labels_short = {
-                            "cat_1_product":     "🔍 產品理解類",
-                            "cat_2_price":       "💰 價格異議類",
-                            "cat_3_trust":       "🛡️ 信任疑慮類",
-                            "cat_4_competition": "⚔️ 競品比較類",
-                            "cat_5_decision":    "🚪 決策障礙類",
-                            "cat_org_trust":     "🏢 組織與商業模式疑慮類",
-                            "cat_rules_info":    "📖 規則與資格說明類",
-                            "cat_6_custom":      "✏️ 主管自訂類",
-                        }
-                        for cat_key, cat_label in cat_labels_short.items():
-                            cat_qs = questions_by_category.get(cat_key, [])
-                            if not cat_qs:
-                                continue
-                            with st.expander(f"{cat_label}（{len(cat_qs)} 題）", expanded=False):
-                                for qi, q in enumerate(cat_qs):
-                                    if "👉" in q:
-                                        q_display, q_hint = q.split("👉", 1)
-                                        # 去除 AI 已經生成的「建議回答方向：」前綴，避免重複
-                                        q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', q_hint.strip())
-                                    else:
-                                        q_display, q_hint = q, ""
-                                    st.text_input(
-                                        label=f"題目",
-                                        value=q_display.strip(),
-                                        key=f"random_q_{cat_key}_{qi}",
-                                        label_visibility="collapsed"
-                                    )
-                                    st.text_input(
-                                        label="建議回答方向",
-                                        value=q_hint,
-                                        key=f"random_hint_{cat_key}_{qi}",
-                                        placeholder="輸入建議回答方向",
-                                    )
-                                    st.markdown("---")
-                    else:
-                        # ── 舊版相容：無分類資料，顯示扁平列表 ────────────
+                    cat_labels_short = {
+                        "cat_1_product":     "🔍 產品理解類",
+                        "cat_2_price":       "💰 價格異議類",
+                        "cat_3_trust":       "🛡️ 信任疑慮類",
+                        "cat_4_competition": "⚔️ 競品比較類",
+                        "cat_5_decision":    "🚪 決策障礙類",
+                        "cat_org_trust":     "🏢 組織與商業模式疑慮類",
+                        "cat_rules_info":    "📖 規則與資格說明類",
+                    }
+
+                    if not _active_rows_for_preview and not st.session_state.get("custom_questions"):
+                        # ── 舊版相容：查無分類資料時，顯示扁平列表 ────────────
                         for i, q_text in enumerate(questions):
                             st.markdown(f'<div class="question-card">', unsafe_allow_html=True)
                             col_num, col_content = st.columns([0.07, 0.93])
@@ -793,6 +748,64 @@ if tab1 is not None:
                             st.markdown('</div>', unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.success(f"✅ 共 {total_q} 題已載入題庫，系統將每次隨機抽取 2 題。")
+                    else:
+                        total_count = 0
+                        active_cat_count = 0
+                        for _cat_key in cat_labels_short:
+                            _cat_total = sum(
+                                len((r.get("questions_by_category") or {}).get(_cat_key, []))
+                                for r in _active_rows_for_preview
+                            )
+                            total_count += _cat_total
+                            if _cat_total > 0:
+                                active_cat_count += 1
+                        if st.session_state.get("custom_questions"):
+                            total_count += len(st.session_state["custom_questions"])
+                            active_cat_count += 1
+
+                        st.success(
+                            f"✅ 題庫共 {total_count} 題，分為 {active_cat_count} 大類別，"
+                            f"系統每次從不同類別各抽 1 題（共 2 題）。"
+                        )
+
+                        for cat_key, cat_label in cat_labels_short.items():
+                            _cat_file_groups = [
+                                (r.get("filename", "未命名"),
+                                 (r.get("questions_by_category") or {}).get(cat_key, []))
+                                for r in _active_rows_for_preview
+                            ]
+                            _cat_file_groups = [(fn, qs) for fn, qs in _cat_file_groups if qs]
+                            if not _cat_file_groups:
+                                continue
+                            _cat_total_qs = sum(len(qs) for _, qs in _cat_file_groups)
+                            with st.expander(f"{cat_label}（{_cat_total_qs} 題）", expanded=False):
+                                for _fn, _qs in _cat_file_groups:
+                                    st.markdown(f"**── 📄 來自：{_fn} ──**")
+                                    for _q in _qs:
+                                        if "👉" in _q:
+                                            _q_disp, _q_hint = _q.split("👉", 1)
+                                            _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
+                                        else:
+                                            _q_disp, _q_hint = _q, ""
+                                        st.markdown(f"- {_q_disp.strip()}")
+                                        if _q_hint.strip():
+                                            st.caption(f"　👉{_q_hint.strip()}")
+                                    st.markdown("")
+
+                        if st.session_state.get("custom_questions"):
+                            with st.expander(
+                                f"✏️ 主管自訂類（{len(st.session_state['custom_questions'])} 題）",
+                                expanded=False
+                            ):
+                                for _q in st.session_state["custom_questions"]:
+                                    if "👉" in _q:
+                                        _q_disp, _q_hint = _q.split("👉", 1)
+                                        _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
+                                    else:
+                                        _q_disp, _q_hint = _q, ""
+                                    st.markdown(f"- {_q_disp.strip()}")
+                                    if _q_hint.strip():
+                                        st.caption(f"　👉{_q_hint.strip()}")
 
                     # ── 主管自訂考題 ──────────────────────
                     st.markdown("---")
