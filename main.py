@@ -18,6 +18,7 @@ load_dotenv()
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
                       save_training_set_file, update_training_set_question,
+                      get_disabled_categories, set_disabled_categories,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
                       set_company_credentials, create_employee_account, list_all_companies)
@@ -401,6 +402,28 @@ if tab1 is not None:
         )
         # 即時同步到 session_state（不需按鈕）
         st.session_state["customer_scenario"] = customer_scenario_input
+
+        # ── 本週練習類別開關 ──────────────────────
+        st.markdown("---")
+        st.markdown("#### 🎛️ 本週練習類別設定")
+        st.caption("關掉的分類，員工在「隨機挑戰模式」暫時不會抽到；關掉不影響"
+                   "題庫本身，題目都還在，隨時可以打開。")
+        _company_id_for_cats = get_or_create_company(st.session_state.get("current_company", ""))
+        _disabled_cats = get_disabled_categories(_company_id_for_cats)
+        _new_disabled_cats = []
+        _cat_cols = st.columns(2)
+        for _idx, (_cat_key, _cat_label) in enumerate(CATEGORY_LABELS.items()):
+            with _cat_cols[_idx % 2]:
+                _checked = st.checkbox(
+                    _cat_label,
+                    value=(_cat_key not in _disabled_cats),
+                    key=f"cat_enable_{_cat_key}"
+                )
+                if not _checked:
+                    _new_disabled_cats.append(_cat_key)
+        if set(_new_disabled_cats) != set(_disabled_cats):
+            set_disabled_categories(_company_id_for_cats, _new_disabled_cats)
+            st.rerun()
 
         # 顯示目前任務狀態
         st.markdown("---")
@@ -1055,39 +1078,112 @@ if tab2 is not None:
         current_mode = st.session_state.get("question_mode", "🎯 主管精選模式")
 
         if current_mode == "🎲 隨機挑戰模式":
-            # 隨機挑戰模式：每次新對話開始時跨類別各抽 1 題，共抽 2 題
+            # 隨機挑戰模式：強制順序覆蓋法
+            # 階段A（覆蓋模式）：只要還有任何啟用中的分類存在「沒練過的題目」，
+            # 就按固定順序（config.CATEGORY_LABELS的順序）輪替分類，優先把每個
+            # 分類的題目都摸過一輪，確保新人不會漏練任何一種疑慮。
+            # 階段B（分數優先模式）：所有分類都覆蓋完畢後，改成排除「上一次剛
+            # 練過的分類」，剩下的分類用「平均分數越低、被選中機率越高」的
+            # 加權隨機去選，弱點會更常被抽到，但不會每次都卡在同一類。
+            # 兩個階段選定分類後，分類底下的題目一律用「沒看過優先、其次練習
+            # 次數最少優先、都差不多才隨機」去挑，最多抽2題，分類本身只有1題
+            # 就只出1題，不勉強湊數。
             if not st.session_state.get("chat_history"):
                 questions_by_category = st.session_state.get("questions_by_category", {})
+                _company_id_now = st.session_state.get("company_id", "")
+                _employee_now = st.session_state.get("employee_name", "匿名員工")
 
-                if questions_by_category:
-                    # 優先：找出「題目數 >= 2」的類別，隨機選一個，從裡面抽兩題，
-                    # 讓同一次對話圍繞同一個主題（同理心+溝通溫度都在講同一件事），
-                    # 避免員工在不相關的疑慮之間跳來跳去、練不出對話的連貫感
-                    rich_cats = [
-                        cat for cat, qs in questions_by_category.items() if len(qs) >= 2
+                _disabled_cats = get_disabled_categories(_company_id_now)
+                available_cats = [
+                    cat for cat, qs in questions_by_category.items()
+                    if qs and cat not in _disabled_cats
+                ]
+                if not available_cats:
+                    # 主管關掉了全部分類（或本來就沒有），保底忽略停用設定，
+                    # 避免員工完全抽不到題目
+                    available_cats = [cat for cat, qs in questions_by_category.items() if qs]
+
+                if available_cats:
+                    category_scores: dict = {}
+                    question_counts: dict = {}
+                    last_cat = None
+                    try:
+                        _sb_hist = get_supabase()
+                        _hist_result = _sb_hist.table("scores").select(
+                            "score, practiced_questions, created_at"
+                        ).eq(
+                            "company_id", _company_id_now
+                        ).eq(
+                            "employee_name", _employee_now
+                        ).order("created_at", desc=False).execute()
+                        _hist_rows = _hist_result.data or []
+                        for _row in _hist_rows:
+                            _pq = _row.get("practiced_questions") or []
+                            _score = _row.get("score", 0)
+                            for _item in _pq:
+                                _cat = _item.get("category", "")
+                                _q_text = _item.get("question", "")
+                                if not _cat or not _q_text:
+                                    continue
+                                category_scores.setdefault(_cat, []).append(_score)
+                                question_counts.setdefault(_cat, {})
+                                question_counts[_cat][_q_text] = question_counts[_cat].get(_q_text, 0) + 1
+                        if _hist_rows:
+                            _last_pq = _hist_rows[-1].get("practiced_questions") or []
+                            if _last_pq:
+                                last_cat = _last_pq[0].get("category", None)
+                    except Exception as _e_hist:
+                        print(f"[Supabase警告] 讀取練習歷史失敗，改用純隨機抽題：{_e_hist}")
+
+                    # 找出「還有沒練過題目」的分類
+                    cats_with_uncovered = [
+                        cat for cat in available_cats
+                        if any(q not in question_counts.get(cat, {}) for q in questions_by_category[cat])
                     ]
-                    if rich_cats:
-                        selected_cat = random.choice(rich_cats)
-                        randomly_selected = random.sample(questions_by_category[selected_cat], 2)
-                    else:
-                        # 備援一：沒有任何類別題目數 >= 2，退回跨類別各抽 1 題
-                        available_cats = [
-                            cat for cat, qs in questions_by_category.items() if qs
-                        ]
-                        if len(available_cats) >= 2:
-                            selected_cats = random.sample(available_cats, 2)
-                            randomly_selected = [
-                                random.choice(questions_by_category[cat])
-                                for cat in selected_cats
-                            ]
+
+                    rotation_order = list(CATEGORY_LABELS.keys())
+
+                    if cats_with_uncovered:
+                        # ── 階段A：覆蓋模式，固定順序輪替 ──
+                        if last_cat in rotation_order:
+                            start_idx = rotation_order.index(last_cat) + 1
                         else:
-                            # 備援二：類別也不足，從所有題目中隨機抽 2 題
-                            all_q = st.session_state.get("questions", [])
-                            randomly_selected = random.sample(all_q, min(2, len(all_q)))
+                            start_idx = 0
+                        selected_cat = None
+                        for _i in range(len(rotation_order)):
+                            _candidate = rotation_order[(start_idx + _i) % len(rotation_order)]
+                            if _candidate in cats_with_uncovered:
+                                selected_cat = _candidate
+                                break
+                        if selected_cat is None:
+                            selected_cat = cats_with_uncovered[0]
+                    else:
+                        # ── 階段B：分數優先模式，加權隨機（不連續同分類）──
+                        _candidates = list(available_cats)
+                        if len(_candidates) > 1 and last_cat in _candidates:
+                            _candidates = [c for c in _candidates if c != last_cat]
+                        _avg = {
+                            c: (sum(category_scores[c]) / len(category_scores[c]))
+                            if category_scores.get(c) else 50
+                            for c in _candidates
+                        }
+                        _weights = [max(1, 101 - _avg[c]) for c in _candidates]
+                        selected_cat = random.choices(_candidates, weights=_weights, k=1)[0]
+
+                    # ── 分類選定後，挑題目：沒看過優先、其次練習次數最少優先 ──
+                    _cat_questions = list(questions_by_category[selected_cat])
+                    _cat_q_counts = question_counts.get(selected_cat, {})
+                    _q_with_counts = [(q, _cat_q_counts.get(q, 0)) for q in _cat_questions]
+                    random.shuffle(_q_with_counts)
+                    _q_with_counts.sort(key=lambda x: x[1])
+                    randomly_selected = [q for q, _ in _q_with_counts[:min(2, len(_q_with_counts))]]
+
+                    st.session_state["current_random_category"] = selected_cat
                 else:
-                    # 無分類資料（舊版）：從扁平列表中隨機抽 2 題
+                    # 完全沒有分類資料：從扁平列表隨機抽 2 題（舊版相容）
                     all_q = st.session_state.get("questions", [])
                     randomly_selected = random.sample(all_q, min(2, len(all_q)))
+                    st.session_state["current_random_category"] = ""
 
                 st.session_state["current_random_questions"] = randomly_selected
 
@@ -1379,6 +1475,17 @@ if tab2 is not None:
                                             "closing_result": auto_report.get("closing_result", ""),
                                             "strength":       auto_report.get("strength", ""),
                                             "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
+                                            "practiced_questions": json.dumps(
+                                                (
+                                                    [
+                                                        {"category": st.session_state.get("current_random_category", ""), "question": q}
+                                                        for q in published_questions
+                                                    ]
+                                                    if st.session_state.get("question_mode", "🎯 主管精選模式") == "🎲 隨機挑戰模式"
+                                                    else []
+                                                ),
+                                                ensure_ascii=False
+                                            ),
                                         }
                                         if session_id:
                                             scores_payload["session_id"] = session_id
