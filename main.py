@@ -2094,6 +2094,92 @@ with tab3:
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
+                # ── 📊 分類訓練狀況總覽（急速模式）─────────────────
+                st.markdown("### 📊 分類訓練狀況（急速模式）")
+
+                speed_only_for_cat = [s for s in scores_data if _infer_mode(s) == "speed"]
+
+                if not speed_only_for_cat:
+                    st.info("ℹ️ 目前尚無「急速模式」的訓練記錄。")
+                else:
+                    emp_cat_stats: dict = {}
+                    for s in speed_only_for_cat:
+                        _name = s.get("employee_name", "匿名員工")
+                        _score_v = s.get("score", 0)
+                        _pq = s.get("practiced_questions") or []
+                        _cats_in_session = set(
+                            item.get("category", "") for item in _pq if item.get("category")
+                        )
+                        for _cat in _cats_in_session:
+                            emp_cat_stats.setdefault(_name, {}).setdefault(_cat, {"scores": [], "count": 0})
+                            emp_cat_stats[_name][_cat]["scores"].append(_score_v)
+                            emp_cat_stats[_name][_cat]["count"] += 1
+
+                    if not emp_cat_stats:
+                        st.info("ℹ️ 目前的訓練記錄還沒有分類資訊（分類統計僅適用於「隨機挑戰模式」"
+                                "累積的新資料，主管精選模式或更早期的舊資料不會有分類標記）。")
+                    else:
+                        _cat_keys = list(CATEGORY_LABELS.keys())
+                        _cat_short_labels = {
+                            k: (v.split("：")[-1] if "：" in v else v) for k, v in CATEGORY_LABELS.items()
+                        }
+
+                        # ── 總覽表格：橫軸7大分類、縱軸每個員工 ──
+                        _table_rows = []
+                        for _name in sorted(emp_cat_stats.keys()):
+                            _row = {"員工": _name}
+                            for _cat in _cat_keys:
+                                _stat = emp_cat_stats[_name].get(_cat)
+                                if _stat and _stat["count"] > 0:
+                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
+                                    _row[_cat_short_labels[_cat]] = f"{_avg:.0f}分({_stat['count']}次)"
+                                else:
+                                    _row[_cat_short_labels[_cat]] = "—"
+                            _table_rows.append(_row)
+
+                        st.dataframe(pd.DataFrame(_table_rows).set_index("員工"), use_container_width=True)
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        # ── 點選單一員工，展開詳細分類表現 ──
+                        _selected_emp = st.selectbox(
+                            "🔍 選擇員工查看詳細分類表現",
+                            options=sorted(emp_cat_stats.keys()),
+                            key="cat_detail_emp_select"
+                        )
+                        if _selected_emp:
+                            _emp_stats = emp_cat_stats[_selected_emp]
+                            _detail_rows = []
+                            for _cat in _cat_keys:
+                                _stat = _emp_stats.get(_cat)
+                                if _stat and _stat["count"] > 0:
+                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
+                                    _detail_rows.append({
+                                        "分類": CATEGORY_LABELS[_cat],
+                                        "平均分數": f"{_avg:.0f} 分",
+                                        "練習次數": _stat["count"],
+                                    })
+                                else:
+                                    _detail_rows.append({
+                                        "分類": CATEGORY_LABELS[_cat],
+                                        "平均分數": "尚未練習",
+                                        "練習次數": 0,
+                                    })
+                            st.dataframe(pd.DataFrame(_detail_rows), use_container_width=True, hide_index=True)
+
+                            _practiced_cats = [r for r in _detail_rows if r["練習次數"] > 0]
+                            if _practiced_cats:
+                                _weakest_row = min(
+                                    _practiced_cats,
+                                    key=lambda r: float(r["平均分數"].replace(" 分", ""))
+                                )
+                                st.caption(
+                                    f"💡 {_selected_emp} 目前表現最弱的分類："
+                                    f"**{_weakest_row['分類']}**（{_weakest_row['平均分數']}）"
+                                )
+
+                st.markdown("---")
+
                 # ── 個別輔導提醒（跨模式，明確標示模式來源）─────
                 st.markdown("<br>", unsafe_allow_html=True)
                 _low_flags, _seen = [], set()
