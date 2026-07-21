@@ -1,7 +1,8 @@
 import streamlit as st
 import json
+import random
 from supabase import create_client, Client
-from config import (SUPABASE_URL, SUPABASE_KEY)
+from config import (SUPABASE_URL, SUPABASE_KEY, CATEGORY_LABELS)
 
 
 def get_supabase() -> Client:
@@ -226,6 +227,107 @@ def update_training_set_question(training_set_id: str, category_key: str, questi
         return False
 
 
+def select_next_questions(company_id: str, employee_name: str, questions_by_category: dict) -> tuple:
+    """
+    隨機挑戰模式的核心抽題邏輯（網頁版main.py、LINE bot共用同一份）。
+
+    強制順序覆蓋法：
+    階段A（覆蓋模式）：只要還有任何啟用中的分類存在「沒練過的題目」，就按
+    CATEGORY_LABELS固定順序輪替分類，優先把每個分類的題目都摸過一輪，
+    確保新人不會漏練任何一種疑慮。
+    階段B（分數優先模式）：全部分類都覆蓋完畢後，排除上一次剛練過的分類，
+    剩下的分類用「平均分數越低、被選中機率越高」的加權隨機去選，弱點會
+    更常被抽到，但不會每次都卡在同一類。
+
+    分類選定後，題目一律「沒看過優先、次數最少優先、都差不多才隨機」去挑，
+    最多抽2題，分類只有1題就只出1題，不勉強湊數。
+
+    回傳 (selected_questions: list[str], selected_category: str)。
+    如果完全沒有可用題目，回傳 ([], "")，呼叫端應自行 fallback 到
+    扁平列表隨機抽題（相容沒有分類資料的舊資料）。
+    """
+    disabled_cats = get_disabled_categories(company_id)
+    available_cats = [
+        cat for cat, qs in questions_by_category.items()
+        if qs and cat not in disabled_cats
+    ]
+    if not available_cats:
+        available_cats = [cat for cat, qs in questions_by_category.items() if qs]
+    if not available_cats:
+        return [], ""
+
+    category_scores: dict = {}
+    question_counts: dict = {}
+    last_cat = None
+    try:
+        sb = get_supabase()
+        hist_result = sb.table("scores").select(
+            "score, practiced_questions, created_at"
+        ).eq(
+            "company_id", company_id
+        ).eq(
+            "employee_name", employee_name
+        ).order("created_at", desc=False).execute()
+        hist_rows = hist_result.data or []
+        for row in hist_rows:
+            pq = row.get("practiced_questions") or []
+            score_v = row.get("score", 0)
+            for item in pq:
+                cat = item.get("category", "")
+                q_text = item.get("question", "")
+                if not cat or not q_text:
+                    continue
+                category_scores.setdefault(cat, []).append(score_v)
+                question_counts.setdefault(cat, {})
+                question_counts[cat][q_text] = question_counts[cat].get(q_text, 0) + 1
+        if hist_rows:
+            last_pq = hist_rows[-1].get("practiced_questions") or []
+            if last_pq:
+                last_cat = last_pq[0].get("category", None)
+    except Exception as e:
+        print(f"[Supabase警告] select_next_questions 讀取練習歷史失敗，改用純隨機抽題：{e}")
+
+    cats_with_uncovered = [
+        cat for cat in available_cats
+        if any(q not in question_counts.get(cat, {}) for q in questions_by_category[cat])
+    ]
+    rotation_order = list(CATEGORY_LABELS.keys())
+
+    if cats_with_uncovered:
+        if last_cat in rotation_order:
+            start_idx = rotation_order.index(last_cat) + 1
+        else:
+            start_idx = 0
+        selected_cat = None
+        for i in range(len(rotation_order)):
+            candidate = rotation_order[(start_idx + i) % len(rotation_order)]
+            if candidate in cats_with_uncovered:
+                selected_cat = candidate
+                break
+        if selected_cat is None:
+            selected_cat = cats_with_uncovered[0]
+    else:
+        candidates = list(available_cats)
+        if len(candidates) > 1 and last_cat in candidates:
+            candidates = [c for c in candidates if c != last_cat]
+        avg = {
+            c: (sum(category_scores[c]) / len(category_scores[c]))
+            if category_scores.get(c) else 50
+            for c in candidates
+        }
+        weights = [max(1, 101 - avg[c]) for c in candidates]
+        selected_cat = random.choices(candidates, weights=weights, k=1)[0]
+
+    cat_questions = list(questions_by_category[selected_cat])
+    cat_q_counts = question_counts.get(selected_cat, {})
+    q_with_counts = [(q, cat_q_counts.get(q, 0)) for q in cat_questions]
+    random.shuffle(q_with_counts)
+    q_with_counts.sort(key=lambda x: x[1])
+    selected_questions = [q for q, _ in q_with_counts[:min(2, len(q_with_counts))]]
+
+    return selected_questions, selected_cat
+
+
 def save_settings() -> None:
     """
     將目前的任務發布設定（已選定的2題、客戶情境）同步更新到這家公司
@@ -381,8 +483,13 @@ def get_company_training_material(company_id: str) -> dict:
             return {}
 
         combined_questions = []
+        combined_by_category = {}
         for row in result.data:
             combined_questions.extend(row.get("questions") or [])
+            qbc = row.get("questions_by_category") or {}
+            for cat, qs in qbc.items():
+                combined_by_category.setdefault(cat, [])
+                combined_by_category[cat].extend(qs)
 
         latest = result.data[-1]
 
@@ -392,6 +499,7 @@ def get_company_training_material(company_id: str) -> dict:
             "product_benefits":  latest.get("product_benefits", ""),
             "customer_scenario": latest.get("customer_scenario", ""),
             "questions":         combined_questions,
+            "questions_by_category": combined_by_category,
         }
     except Exception as e:
         print(f"[Supabase警告] get_company_training_material 失敗：{e}")

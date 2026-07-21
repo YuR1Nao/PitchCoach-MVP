@@ -17,7 +17,7 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent, AudioMessageCo
 
 from database import (
     get_supabase, get_employee_by_username, get_company_name_by_id,
-    get_company_training_material,
+    get_company_training_material, select_next_questions,
 )
 from ai_services import get_customer_response, get_evaluation_report, speech_to_text
 
@@ -252,17 +252,26 @@ def handle_incoming(line_user_id: str, user_text: str):
 
         material = get_company_training_material(session["company_id"])
         questions_pool = material.get("questions", [])
+        questions_by_category = material.get("questions_by_category", {})
         if not questions_pool:
             push(line_user_id, "目前你們公司還沒有上傳訓練教材，麻煩先請主管到 PitchCoach 後台上傳，稍後再回來練習喔！")
             return
 
-        picked = random.sample(questions_pool, min(2, len(questions_pool)))
+        picked, picked_category = select_next_questions(
+            session["company_id"], session.get("employee_name", ""), questions_by_category
+        )
+        if not picked:
+            # 沒有分類資料（舊版相容）：從扁平列表隨機抽題
+            picked = random.sample(questions_pool, min(2, len(questions_pool)))
+            picked_category = ""
+
         save_session(line_user_id, {
             "state": "in_conversation",
             "training_mode": mode,
             "current_q_idx": 0,
             "chat_history": [],
             "picked_questions": picked,
+            "picked_category": picked_category,
         })
         mode_label = ("⚡ 急速模式：每題最多追問一次，快速決勝負" if mode == "speed"
                        else "🔥 深度模式：AI 嚴格追問，答不好絕不放過")
@@ -317,6 +326,10 @@ def handle_incoming(line_user_id: str, user_text: str):
                 "closing_result":    report.get("closing_result", ""),
                 "strength":          report.get("strength", ""),
                 "improvement_tips":  report.get("improvement_tips", []),
+                "practiced_questions": [
+                    {"category": session.get("picked_category", ""), "question": q}
+                    for q in picked_questions
+                ],
             }).execute()
 
             save_session(line_user_id, {

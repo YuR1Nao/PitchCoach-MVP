@@ -18,7 +18,7 @@ load_dotenv()
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
                       save_training_set_file, update_training_set_question,
-                      get_disabled_categories, set_disabled_categories,
+                      get_disabled_categories, set_disabled_categories, select_next_questions,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
                       set_company_credentials, create_employee_account, list_all_companies)
@@ -1093,98 +1093,16 @@ if tab2 is not None:
                 _company_id_now = st.session_state.get("company_id", "")
                 _employee_now = st.session_state.get("employee_name", "匿名員工")
 
-                _disabled_cats = get_disabled_categories(_company_id_now)
-                available_cats = [
-                    cat for cat, qs in questions_by_category.items()
-                    if qs and cat not in _disabled_cats
-                ]
-                if not available_cats:
-                    # 主管關掉了全部分類（或本來就沒有），保底忽略停用設定，
-                    # 避免員工完全抽不到題目
-                    available_cats = [cat for cat, qs in questions_by_category.items() if qs]
-
-                if available_cats:
-                    category_scores: dict = {}
-                    question_counts: dict = {}
-                    last_cat = None
-                    try:
-                        _sb_hist = get_supabase()
-                        _hist_result = _sb_hist.table("scores").select(
-                            "score, practiced_questions, created_at"
-                        ).eq(
-                            "company_id", _company_id_now
-                        ).eq(
-                            "employee_name", _employee_now
-                        ).order("created_at", desc=False).execute()
-                        _hist_rows = _hist_result.data or []
-                        for _row in _hist_rows:
-                            _pq = _row.get("practiced_questions") or []
-                            _score = _row.get("score", 0)
-                            for _item in _pq:
-                                _cat = _item.get("category", "")
-                                _q_text = _item.get("question", "")
-                                if not _cat or not _q_text:
-                                    continue
-                                category_scores.setdefault(_cat, []).append(_score)
-                                question_counts.setdefault(_cat, {})
-                                question_counts[_cat][_q_text] = question_counts[_cat].get(_q_text, 0) + 1
-                        if _hist_rows:
-                            _last_pq = _hist_rows[-1].get("practiced_questions") or []
-                            if _last_pq:
-                                last_cat = _last_pq[0].get("category", None)
-                    except Exception as _e_hist:
-                        print(f"[Supabase警告] 讀取練習歷史失敗，改用純隨機抽題：{_e_hist}")
-
-                    # 找出「還有沒練過題目」的分類
-                    cats_with_uncovered = [
-                        cat for cat in available_cats
-                        if any(q not in question_counts.get(cat, {}) for q in questions_by_category[cat])
-                    ]
-
-                    rotation_order = list(CATEGORY_LABELS.keys())
-
-                    if cats_with_uncovered:
-                        # ── 階段A：覆蓋模式，固定順序輪替 ──
-                        if last_cat in rotation_order:
-                            start_idx = rotation_order.index(last_cat) + 1
-                        else:
-                            start_idx = 0
-                        selected_cat = None
-                        for _i in range(len(rotation_order)):
-                            _candidate = rotation_order[(start_idx + _i) % len(rotation_order)]
-                            if _candidate in cats_with_uncovered:
-                                selected_cat = _candidate
-                                break
-                        if selected_cat is None:
-                            selected_cat = cats_with_uncovered[0]
-                    else:
-                        # ── 階段B：分數優先模式，加權隨機（不連續同分類）──
-                        _candidates = list(available_cats)
-                        if len(_candidates) > 1 and last_cat in _candidates:
-                            _candidates = [c for c in _candidates if c != last_cat]
-                        _avg = {
-                            c: (sum(category_scores[c]) / len(category_scores[c]))
-                            if category_scores.get(c) else 50
-                            for c in _candidates
-                        }
-                        _weights = [max(1, 101 - _avg[c]) for c in _candidates]
-                        selected_cat = random.choices(_candidates, weights=_weights, k=1)[0]
-
-                    # ── 分類選定後，挑題目：沒看過優先、其次練習次數最少優先 ──
-                    _cat_questions = list(questions_by_category[selected_cat])
-                    _cat_q_counts = question_counts.get(selected_cat, {})
-                    _q_with_counts = [(q, _cat_q_counts.get(q, 0)) for q in _cat_questions]
-                    random.shuffle(_q_with_counts)
-                    _q_with_counts.sort(key=lambda x: x[1])
-                    randomly_selected = [q for q, _ in _q_with_counts[:min(2, len(_q_with_counts))]]
-
-                    st.session_state["current_random_category"] = selected_cat
-                else:
+                randomly_selected, selected_cat = select_next_questions(
+                    _company_id_now, _employee_now, questions_by_category
+                )
+                if not randomly_selected:
                     # 完全沒有分類資料：從扁平列表隨機抽 2 題（舊版相容）
                     all_q = st.session_state.get("questions", [])
                     randomly_selected = random.sample(all_q, min(2, len(all_q)))
-                    st.session_state["current_random_category"] = ""
+                    selected_cat = ""
 
+                st.session_state["current_random_category"] = selected_cat
                 st.session_state["current_random_questions"] = randomly_selected
 
             published_questions = st.session_state.get(
@@ -2033,6 +1951,88 @@ with tab3:
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
+                # ── 📊 分類訓練狀況總覽（急速模式）─────────────────
+                st.markdown("### 📊 分類訓練狀況（急速模式）")
+
+                speed_only_for_cat = [s for s in scores_data if _infer_mode(s) == "speed"]
+
+                if not speed_only_for_cat:
+                    st.info("ℹ️ 目前尚無「急速模式」的訓練記錄。")
+                else:
+                    emp_cat_stats: dict = {}
+                    for s in speed_only_for_cat:
+                        _name = s.get("employee_name", "匿名員工")
+                        _score_v = s.get("score", 0)
+                        _pq = s.get("practiced_questions") or []
+                        _cats_in_session = set(
+                            item.get("category", "") for item in _pq if item.get("category")
+                        )
+                        for _cat in _cats_in_session:
+                            emp_cat_stats.setdefault(_name, {}).setdefault(_cat, {"scores": [], "count": 0})
+                            emp_cat_stats[_name][_cat]["scores"].append(_score_v)
+                            emp_cat_stats[_name][_cat]["count"] += 1
+
+                    if not emp_cat_stats:
+                        st.info("ℹ️ 目前的訓練記錄還沒有分類資訊（分類統計僅適用於「隨機挑戰模式」"
+                                "累積的新資料，主管精選模式或更早期的舊資料不會有分類標記）。")
+                    else:
+                        _cat_keys = list(CATEGORY_LABELS.keys())
+                        _cat_short_labels = {
+                            k: (v.split("：")[-1] if "：" in v else v) for k, v in CATEGORY_LABELS.items()
+                        }
+
+                        _table_rows = []
+                        for _name in sorted(emp_cat_stats.keys()):
+                            _row = {"員工": _name}
+                            for _cat in _cat_keys:
+                                _stat = emp_cat_stats[_name].get(_cat)
+                                if _stat and _stat["count"] > 0:
+                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
+                                    _row[_cat_short_labels[_cat]] = f"{_avg:.0f}分({_stat['count']}次)"
+                                else:
+                                    _row[_cat_short_labels[_cat]] = "—"
+                            _table_rows.append(_row)
+
+                        st.dataframe(pd.DataFrame(_table_rows).set_index("員工"), use_container_width=True)
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        _selected_emp = st.selectbox(
+                            "🔍 選擇員工查看詳細分類表現",
+                            options=sorted(emp_cat_stats.keys()),
+                            key="cat_detail_emp_select"
+                        )
+                        if _selected_emp:
+                            _emp_stats = emp_cat_stats[_selected_emp]
+                            _detail_rows = []
+                            for _cat in _cat_keys:
+                                _stat = _emp_stats.get(_cat)
+                                if _stat and _stat["count"] > 0:
+                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
+                                    _detail_rows.append({
+                                        "分類": CATEGORY_LABELS[_cat],
+                                        "平均分數": f"{_avg:.0f} 分",
+                                        "練習次數": _stat["count"],
+                                    })
+                                else:
+                                    _detail_rows.append({
+                                        "分類": CATEGORY_LABELS[_cat],
+                                        "平均分數": "尚未練習",
+                                        "練習次數": 0,
+                                    })
+                            st.dataframe(pd.DataFrame(_detail_rows), use_container_width=True, hide_index=True)
+
+                            _practiced_cats = [r for r in _detail_rows if r["練習次數"] > 0]
+                            if _practiced_cats:
+                                _weakest_row = min(
+                                    _practiced_cats,
+                                    key=lambda r: float(r["平均分數"].replace(" 分", ""))
+                                )
+                                st.caption(
+                                    f"💡 {_selected_emp} 目前表現最弱的分類："
+                                    f"**{_weakest_row['分類']}**（{_weakest_row['平均分數']}）"
+                                )
+
                 # ── 🎯 深度模式分析區塊 ────────────────────
                 st.markdown(
                     '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);'
@@ -2093,90 +2093,6 @@ with tab3:
                     )
 
                 st.markdown('</div>', unsafe_allow_html=True)
-
-                # ── 📊 分類訓練狀況總覽（急速模式）─────────────────
-                st.markdown("### 📊 分類訓練狀況（急速模式）")
-
-                speed_only_for_cat = [s for s in scores_data if _infer_mode(s) == "speed"]
-
-                if not speed_only_for_cat:
-                    st.info("ℹ️ 目前尚無「急速模式」的訓練記錄。")
-                else:
-                    emp_cat_stats: dict = {}
-                    for s in speed_only_for_cat:
-                        _name = s.get("employee_name", "匿名員工")
-                        _score_v = s.get("score", 0)
-                        _pq = s.get("practiced_questions") or []
-                        _cats_in_session = set(
-                            item.get("category", "") for item in _pq if item.get("category")
-                        )
-                        for _cat in _cats_in_session:
-                            emp_cat_stats.setdefault(_name, {}).setdefault(_cat, {"scores": [], "count": 0})
-                            emp_cat_stats[_name][_cat]["scores"].append(_score_v)
-                            emp_cat_stats[_name][_cat]["count"] += 1
-
-                    if not emp_cat_stats:
-                        st.info("ℹ️ 目前的訓練記錄還沒有分類資訊（分類統計僅適用於「隨機挑戰模式」"
-                                "累積的新資料，主管精選模式或更早期的舊資料不會有分類標記）。")
-                    else:
-                        _cat_keys = list(CATEGORY_LABELS.keys())
-                        _cat_short_labels = {
-                            k: (v.split("：")[-1] if "：" in v else v) for k, v in CATEGORY_LABELS.items()
-                        }
-
-                        # ── 總覽表格：橫軸7大分類、縱軸每個員工 ──
-                        _table_rows = []
-                        for _name in sorted(emp_cat_stats.keys()):
-                            _row = {"員工": _name}
-                            for _cat in _cat_keys:
-                                _stat = emp_cat_stats[_name].get(_cat)
-                                if _stat and _stat["count"] > 0:
-                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
-                                    _row[_cat_short_labels[_cat]] = f"{_avg:.0f}分({_stat['count']}次)"
-                                else:
-                                    _row[_cat_short_labels[_cat]] = "—"
-                            _table_rows.append(_row)
-
-                        st.dataframe(pd.DataFrame(_table_rows).set_index("員工"), use_container_width=True)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-
-                        # ── 點選單一員工，展開詳細分類表現 ──
-                        _selected_emp = st.selectbox(
-                            "🔍 選擇員工查看詳細分類表現",
-                            options=sorted(emp_cat_stats.keys()),
-                            key="cat_detail_emp_select"
-                        )
-                        if _selected_emp:
-                            _emp_stats = emp_cat_stats[_selected_emp]
-                            _detail_rows = []
-                            for _cat in _cat_keys:
-                                _stat = _emp_stats.get(_cat)
-                                if _stat and _stat["count"] > 0:
-                                    _avg = sum(_stat["scores"]) / len(_stat["scores"])
-                                    _detail_rows.append({
-                                        "分類": CATEGORY_LABELS[_cat],
-                                        "平均分數": f"{_avg:.0f} 分",
-                                        "練習次數": _stat["count"],
-                                    })
-                                else:
-                                    _detail_rows.append({
-                                        "分類": CATEGORY_LABELS[_cat],
-                                        "平均分數": "尚未練習",
-                                        "練習次數": 0,
-                                    })
-                            st.dataframe(pd.DataFrame(_detail_rows), use_container_width=True, hide_index=True)
-
-                            _practiced_cats = [r for r in _detail_rows if r["練習次數"] > 0]
-                            if _practiced_cats:
-                                _weakest_row = min(
-                                    _practiced_cats,
-                                    key=lambda r: float(r["平均分數"].replace(" 分", ""))
-                                )
-                                st.caption(
-                                    f"💡 {_selected_emp} 目前表現最弱的分類："
-                                    f"**{_weakest_row['分類']}**（{_weakest_row['平均分數']}）"
-                                )
 
                 st.markdown("---")
 
