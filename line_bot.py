@@ -341,14 +341,35 @@ def handle_incoming(line_user_id: str, user_text: str):
             })
 
             tips = report.get("improvement_tips", [])
-            report_messages = [clean_reply, f"📊 這次的綜合分數：{report.get('score', 0)} 分"]
+            training_mode_used = session.get("training_mode", "speed")
+
+            msg_score = f"📊 這次的綜合分數：{report.get('score', 0)} 分"
+            if training_mode_used == "speed":
+                msg_score += "\n（急速模式不評估成交）"
+            elif report.get("closing_result"):
+                msg_score += f"\n成交結果：{report['closing_result']}"
+
+            msg_analysis_parts = []
             if report.get("strength"):
-                report_messages.append(f"✨ 表現亮點：{report['strength']}")
+                msg_analysis_parts.append(f"✨ 表現亮點\n{report['strength']}")
+            if report.get("left_brain"):
+                msg_analysis_parts.append(f"🧠 左腦分析（產品知識掌握度）\n{report['left_brain']}")
+            if report.get("right_brain"):
+                msg_analysis_parts.append(f"💬 右腦分析（語氣同理心與說服力）\n{report['right_brain']}")
+            msg_analysis = "\n\n".join(msg_analysis_parts)
+
+            msg_tips = ""
             if tips:
-                report_messages.append(f"🎯 下次練習重點：{tips[0]}")
+                msg_tips = "🎯 下次練習重點\n" + "\n".join(f"{i+1}. {t}" for i, t in enumerate(tips))
+
+            report_messages = [clean_reply, msg_score]
+            if msg_analysis:
+                report_messages.append(msg_analysis)
+            if msg_tips:
+                report_messages.append(msg_tips)
             report_messages.append("要再練一次嗎？選一個模式開始：")
 
-            push(line_user_id, report_messages[:4], quick_items=mode_quick_reply())
+            push(line_user_id, report_messages, quick_items=mode_quick_reply())
         else:
             save_session(line_user_id, {
                 "chat_history": chat_history,
