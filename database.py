@@ -46,12 +46,13 @@ def load_settings() -> None:
         combined_questions = []
         combined_by_category = {}
         for row in result.data:
+            excluded = set(row.get("excluded_questions") or [])
             qbc = row.get("questions_by_category") or {}
             for cat, qs in qbc.items():
                 if cat not in combined_by_category:
                     combined_by_category[cat] = []
-                combined_by_category[cat].extend(qs)
-            combined_questions.extend(row.get("questions") or [])
+                combined_by_category[cat].extend(q for q in qs if q not in excluded)
+            combined_questions.extend(q for q in (row.get("questions") or []) if q not in excluded)
 
         latest = result.data[-1]
         all_filenames = "、".join(r.get("filename", "") for r in result.data)
@@ -104,7 +105,7 @@ def get_all_training_sets(company_id: str) -> list:
     try:
         sb = get_supabase()
         result = sb.table("training_sets").select(
-            "id, filename, questions_by_category, created_at, is_active"
+            "id, filename, questions_by_category, created_at, is_active, excluded_questions"
         ).eq("company_id", company_id).eq(
             "is_published", True
         ).order("created_at", desc=False).execute()
@@ -328,6 +329,31 @@ def select_next_questions(company_id: str, employee_name: str, questions_by_cate
     return selected_questions, selected_cat
 
 
+def toggle_question_included(training_set_id: str, question_text: str, included: bool) -> bool:
+    """
+    切換單一題目是否納入員工隨機挑戰模式的抽題範圍。
+    included=False：把這題加進該筆紀錄的 excluded_questions 清單（暫時
+    排除，題目本身不會被刪除，隨時可以再打勾恢復）。
+    included=True：把它從清單中移除，恢復正常參與抽題。
+    """
+    try:
+        sb = get_supabase()
+        result = sb.table("training_sets").select("excluded_questions").eq("id", training_set_id).execute()
+        if not result.data:
+            return False
+        excluded = list(result.data[0].get("excluded_questions") or [])
+        if included:
+            excluded = [q for q in excluded if q != question_text]
+        else:
+            if question_text not in excluded:
+                excluded.append(question_text)
+        sb.table("training_sets").update({"excluded_questions": excluded}).eq("id", training_set_id).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase警告] toggle_question_included 失敗：{e}")
+        return False
+
+
 def save_settings() -> None:
     """
     將目前的任務發布設定（已選定的2題、客戶情境）同步更新到這家公司
@@ -485,11 +511,12 @@ def get_company_training_material(company_id: str) -> dict:
         combined_questions = []
         combined_by_category = {}
         for row in result.data:
-            combined_questions.extend(row.get("questions") or [])
+            excluded = set(row.get("excluded_questions") or [])
+            combined_questions.extend(q for q in (row.get("questions") or []) if q not in excluded)
             qbc = row.get("questions_by_category") or {}
             for cat, qs in qbc.items():
                 combined_by_category.setdefault(cat, [])
-                combined_by_category[cat].extend(qs)
+                combined_by_category[cat].extend(q for q in qs if q not in excluded)
 
         latest = result.data[-1]
 

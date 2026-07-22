@@ -17,7 +17,7 @@ load_dotenv()
 
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
-                      save_training_set_file, update_training_set_question,
+                      save_training_set_file, update_training_set_question, toggle_question_included,
                       get_disabled_categories, set_disabled_categories, select_next_questions,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
@@ -744,6 +744,10 @@ if tab1 is not None:
                     _active_rows_for_preview = [
                         r for r in _all_rows_for_preview if r.get("is_active", True)
                     ]
+                    _row_excluded_lookup = {
+                        r.get("id"): set(r.get("excluded_questions") or [])
+                        for r in _active_rows_for_preview
+                    }
 
                     cat_labels_short = {
                         "cat_1_product":     "🔍 產品理解類",
@@ -858,7 +862,17 @@ if tab1 is not None:
                                                     st.rerun()
                                         else:
                                             # ── 一般顯示模式 ──
-                                            _col_q, _col_edit, _col_del = st.columns([0.82, 0.09, 0.09])
+                                            _col_check, _col_q, _col_edit, _col_del = st.columns([0.08, 0.74, 0.09, 0.09])
+                                            with _col_check:
+                                                _is_included = _q not in _row_excluded_lookup.get(_rid, set())
+                                                _new_included = st.checkbox(
+                                                    "納入", value=_is_included,
+                                                    key=f"qinc_{_rid}_{cat_key}_{_qi}",
+                                                    label_visibility="collapsed"
+                                                )
+                                                if _new_included != _is_included:
+                                                    toggle_question_included(_rid, _q, _new_included)
+                                                    st.rerun()
                                             with _col_q:
                                                 st.markdown(f"- {_q_disp.strip()}")
                                                 if _q_hint.strip():
