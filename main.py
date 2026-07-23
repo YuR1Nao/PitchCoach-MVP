@@ -414,10 +414,11 @@ if tab1 is not None:
         _cat_cols = st.columns(2)
         for _idx, (_cat_key, _cat_label) in enumerate(CATEGORY_LABELS.items()):
             with _cat_cols[_idx % 2]:
+                _cat_checked_now = (_cat_key not in _disabled_cats)
                 _checked = st.checkbox(
                     _cat_label,
-                    value=(_cat_key not in _disabled_cats),
-                    key=f"cat_enable_{_cat_key}"
+                    value=_cat_checked_now,
+                    key=f"cat_enable_{_cat_key}_{int(_cat_checked_now)}"
                 )
                 if not _checked:
                     _new_disabled_cats.append(_cat_key)
@@ -867,7 +868,7 @@ if tab1 is not None:
                                                 _is_included = _q not in _row_excluded_lookup.get(_rid, set())
                                                 _new_included = st.checkbox(
                                                     "納入", value=_is_included,
-                                                    key=f"qinc_{_rid}_{cat_key}_{_qi}",
+                                                    key=f"qinc_{_rid}_{cat_key}_{_qi}_{int(_is_included)}",
                                                     label_visibility="collapsed"
                                                 )
                                                 if _new_included != _is_included:
