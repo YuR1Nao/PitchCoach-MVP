@@ -247,13 +247,7 @@ def select_next_questions(company_id: str, employee_name: str, questions_by_cate
     如果完全沒有可用題目，回傳 ([], "")，呼叫端應自行 fallback 到
     扁平列表隨機抽題（相容沒有分類資料的舊資料）。
     """
-    disabled_cats = get_disabled_categories(company_id)
-    available_cats = [
-        cat for cat, qs in questions_by_category.items()
-        if qs and cat not in disabled_cats
-    ]
-    if not available_cats:
-        available_cats = [cat for cat, qs in questions_by_category.items() if qs]
+    available_cats = [cat for cat, qs in questions_by_category.items() if qs]
     if not available_cats:
         return [], ""
 
@@ -378,33 +372,6 @@ def save_settings() -> None:
         print("[Supabase] 任務發布設定更新成功")
     except Exception as e:
         st.error(f"⚠️ Supabase 儲存失敗：{str(e)}，請重新嘗試發布")
-
-
-def get_disabled_categories(company_id: str) -> list:
-    """取得這家公司目前暫時停用的分類清單（主管手動關閉，不影響題庫本身，
-    只影響員工隨機挑戰模式抽不抽得到）"""
-    try:
-        sb = get_supabase()
-        result = sb.table("companies").select("disabled_categories").eq("id", company_id).execute()
-        if result.data and result.data[0].get("disabled_categories"):
-            return result.data[0]["disabled_categories"]
-        return []
-    except Exception as e:
-        print(f"[Supabase警告] get_disabled_categories 失敗：{e}")
-        return []
-
-
-def set_disabled_categories(company_id: str, disabled_categories: list) -> bool:
-    """設定這家公司目前暫時停用的分類清單"""
-    try:
-        sb = get_supabase()
-        sb.table("companies").update({
-            "disabled_categories": disabled_categories
-        }).eq("id", company_id).execute()
-        return True
-    except Exception as e:
-        print(f"[Supabase警告] set_disabled_categories 失敗：{e}")
-        return False
 
 
 def get_company_by_access_code(access_code: str):

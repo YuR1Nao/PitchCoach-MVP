@@ -18,7 +18,7 @@ load_dotenv()
 from config import *
 from database import (get_supabase, load_settings, get_or_create_company, save_settings,
                       save_training_set_file, update_training_set_question, toggle_question_included,
-                      get_disabled_categories, set_disabled_categories, select_next_questions,
+                      select_next_questions,
                       get_all_training_sets, delete_training_set, toggle_training_set_active,
                       get_company_by_access_code, get_employee_by_username, get_company_name_by_id,
                       set_company_credentials, create_employee_account, list_all_companies)
@@ -403,29 +403,6 @@ if tab1 is not None:
         # 即時同步到 session_state（不需按鈕）
         st.session_state["customer_scenario"] = customer_scenario_input
 
-        # ── 本週練習類別開關 ──────────────────────
-        st.markdown("---")
-        st.markdown("#### 🎛️ 本週練習類別設定")
-        st.caption("關掉的分類，員工在「隨機挑戰模式」暫時不會抽到；關掉不影響"
-                   "題庫本身，題目都還在，隨時可以打開。")
-        _company_id_for_cats = get_or_create_company(st.session_state.get("current_company", ""))
-        _disabled_cats = get_disabled_categories(_company_id_for_cats)
-        _new_disabled_cats = []
-        _cat_cols = st.columns(2)
-        for _idx, (_cat_key, _cat_label) in enumerate(CATEGORY_LABELS.items()):
-            with _cat_cols[_idx % 2]:
-                _cat_checked_now = (_cat_key not in _disabled_cats)
-                _checked = st.checkbox(
-                    _cat_label,
-                    value=_cat_checked_now,
-                    key=f"cat_enable_{_cat_key}_{int(_cat_checked_now)}"
-                )
-                if not _checked:
-                    _new_disabled_cats.append(_cat_key)
-        if set(_new_disabled_cats) != set(_disabled_cats):
-            set_disabled_categories(_company_id_for_cats, _new_disabled_cats)
-            st.rerun()
-
         # 顯示目前任務狀態
         st.markdown("---")
         st.markdown("#### 📡 任務發布狀態")
@@ -806,7 +783,27 @@ if tab1 is not None:
                             if not _cat_file_groups:
                                 continue
                             _cat_total_qs = sum(len(qs) for _, _, qs in _cat_file_groups)
-                            with st.expander(f"{cat_label}（{_cat_total_qs} 題）", expanded=False):
+                            # 判斷這個分類「目前是否全部題目都納入」，作為批次打勾的初始狀態
+                            _cat_all_included = all(
+                                _qq not in _row_excluded_lookup.get(_rrid, set())
+                                for _rrid, _fn2, _qqs in _cat_file_groups
+                                for _qq in _qqs
+                            )
+                            _cat_col_check, _cat_col_label = st.columns([0.06, 0.94])
+                            with _cat_col_check:
+                                _cat_new_included = st.checkbox(
+                                    "分類批次", value=_cat_all_included,
+                                    key=f"catbatch_{cat_key}_{int(_cat_all_included)}",
+                                    label_visibility="collapsed"
+                                )
+                            with _cat_col_label:
+                                st.markdown(f"**{cat_label}（{_cat_total_qs} 題）**")
+                            if _cat_new_included != _cat_all_included:
+                                for _rrid, _fn2, _qqs in _cat_file_groups:
+                                    for _qq in _qqs:
+                                        toggle_question_included(_rrid, _qq, _cat_new_included)
+                                st.rerun()
+                            with st.expander("查看／編輯題目", expanded=False):
                                 for _rid, _fn, _qs in _cat_file_groups:
                                     st.markdown(f"**── 📄 來自：{_fn} ──**")
                                     for _qi, _q in enumerate(_qs):
