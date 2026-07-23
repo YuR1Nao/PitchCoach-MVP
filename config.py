@@ -35,6 +35,6 @@ PERSIST_KEYS = [
     "main_analysis", "questions", "analyzed_filename",
     "product_name", "product_benefits", "target_audience",
     "published_questions", "task_published", "customer_scenario",
-    "is_completed", "evaluation_report", "question_mode",
+    "is_completed", "evaluation_report",
     "questions_by_category",
 ]

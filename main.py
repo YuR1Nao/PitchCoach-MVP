@@ -349,22 +349,6 @@ if tab1 is not None:
             f"分次上傳，以確保題目品質與涵蓋度。"
         )
         st.markdown("---")
-        st.markdown("#### 🎯 出題模式設定")
-
-        mode = st.radio(
-            label="選擇出題方式",
-            options=["🎲 隨機挑戰模式", "🎯 主管精選模式"],
-            key="question_mode",
-            horizontal=True,
-            help="隨機挑戰：系統每次自動隨機抽2題｜主管精選：手動勾選2題"
-        )
-
-        if mode == "🎲 隨機挑戰模式":
-            st.info("🎲 系統將從所有題目中每次隨機抽取 2 題，員工每次練習題目都不同。主管無需手動選題。")
-        else:
-            st.info("🎯 AI萃取後，主管從題目中勾選 2 題作為本次訓練任務。")
-
-        st.markdown("---")
 
         if uploaded_file is not None:
             st.success(f"✅ 已上傳：**{uploaded_file.name}**")
@@ -377,15 +361,15 @@ if tab1 is not None:
 
         st.markdown("---")
         with st.expander("📖 使用說明"):
-            st.markdown(f"""
+            st.markdown("""
             1. **上傳** 業務培訓 PDF 教材
             2. 點擊 **「🚀 開始 AI 萃取」**
-            3. 在右側**編輯**考題並**勾選 {REQUIRED_SELECTION} 題**
+            3. 在右側**檢視／編輯**AI 產生的題目（可視需要新增主管自訂考題）
             4. 填寫下方「自訂客戶情境」
-            5. 按下 **「💾 儲存並發布訓練任務」**
+            5. 按下 **「🚀 儲存並啟用隨機挑戰模式」**
             6. 切換到 **員工實戰沙盒** 頁籤進行練習
 
-            > 教材文字越清晰，AI 分析越精準。
+            > 教材文字越清晰，AI 分析越精準。系統會自動從題庫中隨機抽題，主管無需手動選題。
             """)
 
         # ── 自訂客戶情境輸入 ──────────────────────
@@ -407,7 +391,7 @@ if tab1 is not None:
         st.markdown("---")
         st.markdown("#### 📡 任務發布狀態")
         if st.session_state.get("task_published", False):
-            st.success(f"✅ 任務已發布　｜　{REQUIRED_SELECTION} 題已設定")
+            st.success("✅ 任務已發布　｜　隨機挑戰模式已啟用")
             st.caption(f"來源教材：{st.session_state.get('analyzed_filename', '—')}")
         else:
             st.warning("⏳ 尚未發布任務")
@@ -533,436 +517,280 @@ if tab1 is not None:
             st.caption(f"📄 分析來源：{st.session_state.get('analyzed_filename', '上傳的文件')}")
             st.markdown("---")
 
-            # 互動考題編輯區（依出題模式分流）
+            # 互動考題編輯區（隨機挑戰模式為唯一出題方式，主管無需再選擇模式）
             questions = st.session_state["questions"]
             total_q   = len(questions)
-            current_mode = st.session_state.get("question_mode", "🎯 主管精選模式")
+            st.markdown("### 💬 題庫預覽（隨機挑戰模式）")
+            st.markdown(
+                '<div class="selection-hint">'
+                '🎲 &nbsp;以下是所有題目，員工每次練習系統將自動隨機抽取 2 題。'
+                '</div>',
+                unsafe_allow_html=True
+            )
 
-            if current_mode == "🎯 主管精選模式":
-                # ── 主管精選模式：勾選 2 題後發布 ──────────────────
-                st.markdown("### 💬 實戰刁難考題 — 主管審核區（10 選 2 極速對決）")
-                st.markdown(
-                    f'<div class="selection-hint">'
-                    f'✏️ &nbsp;可直接編輯每題內容。'
-                    f'　☑️ &nbsp;<strong>請剛好勾選 {REQUIRED_SELECTION} 題</strong>作為本次訓練任務。'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-                if total_q == 0:
-                    st.info("ℹ️ 無法自動解析考題格式，請重新執行 AI 萃取。")
-                else:
-                    questions_by_category = st.session_state.get("questions_by_category", {})
-                    global_q_idx = 0  # 跨類別統一題號索引
-
-                    if questions_by_category:
-                        # ── 有分類資料：按類別用 expander 展開顯示（分類標籤來自 config.CATEGORY_LABELS，
-                        #     會自動反映新增/移除的分類，不寫死數字）──
-                        for cat_key, cat_label in CATEGORY_LABELS.items():
-                            cat_questions = questions_by_category.get(cat_key, [])
-                            if not cat_questions:
-                                continue
-                            with st.expander(f"{cat_label}（共 {len(cat_questions)} 題）", expanded=True):
-                                for _, q_text in enumerate(cat_questions):
-                                    is_checked = st.session_state.get(f"q_check_{global_q_idx}", False)
-                                    card_class = "question-card-selected" if is_checked else "question-card"
-                                    st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
-                                    col_cb, col_ti = st.columns([0.07, 0.93])
-                                    with col_cb:
-                                        st.markdown("<br>", unsafe_allow_html=True)
-                                        st.checkbox("選取", key=f"q_check_{global_q_idx}",
-                                                    label_visibility="collapsed")
-                                    with col_ti:
-                                        st.text_input(
-                                            label=f"題目 {global_q_idx + 1}",
-                                            value=q_text,
-                                            key=f"q_text_{global_q_idx}",
-                                        )
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                                    global_q_idx += 1
-                        total_q = global_q_idx
-
-                    else:
-                        # ── 舊版相容：沒有分類資料時用原本的扁平列表 ──
-                        for i, q_text in enumerate(questions):
-                            is_checked = st.session_state.get(f"q_check_{i}", False)
-                            card_class = "question-card-selected" if is_checked else "question-card"
-                            st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
-                            col_cb, col_ti = st.columns([0.07, 0.93])
-                            with col_cb:
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                st.checkbox("選取", key=f"q_check_{i}", label_visibility="collapsed")
-                            with col_ti:
-                                st.text_input(
-                                    label=f"第 {i+1} 題",
-                                    value=q_text,
-                                    key=f"q_text_{i}",
-                                )
-                            st.markdown('</div>', unsafe_allow_html=True)
-
-                    # 勾選計數（10 選 2 防呆，total_q 已在上方更新）
-                    checked_count = sum(
-                        st.session_state.get(f"q_check_{i}", False)
-                        for i in range(total_q)
-                    )
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    if checked_count == 0:
-                        st.warning(f"⚠️ 請剛好勾選 {REQUIRED_SELECTION} 題作為本次訓練任務")
-                    elif checked_count < REQUIRED_SELECTION:
-                        st.warning(f"⚠️ 請剛好勾選 {REQUIRED_SELECTION} 題作為本次訓練任務（目前 {checked_count} 題，還差 {REQUIRED_SELECTION - checked_count} 題）")
-                    elif checked_count == REQUIRED_SELECTION:
-                        st.success(f"✅ 已勾選 {checked_count} 題，可以發布任務了！")
-                    else:
-                        st.warning(f"⚠️ 請剛好勾選 {REQUIRED_SELECTION} 題作為本次訓練任務（目前 {checked_count} 題，請取消 {checked_count - REQUIRED_SELECTION} 題）")
-
-                    # ── 主管自訂考題 ──────────────────────
-                    st.markdown("---")
-                    st.markdown("#### ✏️ 主管自訂考題")
-                    st.caption(
-                        "AI 沒有出到的問題，可以在這裡手動新增。「建議回答方向」欄位可留空，"
-                        "但填寫後這道題才會有教練提示與評分依據，品質才會跟 AI 出的題一致，"
-                        "強烈建議填寫。"
-                    )
-
-                    new_q = st.text_input(
-                        label="題目",
-                        placeholder="例如：你們的產品跟市面上的有什麼不同？",
-                        key="new_custom_q_input",
-                    )
-                    new_q_hint = st.text_area(
-                        label="建議回答方向（選填，但強烈建議填寫）",
-                        placeholder="例如：說明產品的獨家成分與認證，並舉出跟競品的具體差異",
-                        key="new_custom_q_hint_input",
-                        height=80,
-                    )
-                    if st.button("➕ 新增", key="add_custom_main"):
-                        if new_q.strip():
-                            _combined_q = new_q.strip()
-                            if new_q_hint.strip():
-                                _combined_q += f" 👉 建議回答方向：{new_q_hint.strip()}"
-                            st.session_state["custom_questions"].append(_combined_q)
-                            st.rerun()
-
-                    if st.session_state.get("custom_questions"):
-                        st.caption("以下題目歸類為「✏️ 主管自訂類」，會與 AI 題目一起發布並可被隨機抽中。")
-                        for ci, cq in enumerate(st.session_state["custom_questions"]):
-                            col_cq, col_del = st.columns([0.88, 0.12])
-                            with col_cq:
-                                st.info(f"✏️ {cq}")
-                            with col_del:
-                                if st.button("🗑️", key=f"del_custom_{ci}"):
-                                    st.session_state["custom_questions"].pop(ci)
-                                    st.rerun()
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    publish_button = st.button(
-                        "🚀 儲存並發布訓練任務",
-                        type="primary",
-                        use_container_width=True,
-                        disabled=(checked_count != REQUIRED_SELECTION)
-                    )
-
-                    if publish_button:
-                        selected_qs = [
-                            st.session_state[f"q_text_{i}"]
-                            for i in range(total_q)
-                            if st.session_state.get(f"q_check_{i}", False)
-                        ]
-                        st.session_state["published_questions"] = selected_qs
-                        # 合併主管自訂問題
-                        if st.session_state.get("custom_questions"):
-                            st.session_state["published_questions"].extend(
-                                st.session_state["custom_questions"]
-                            )
-                        st.session_state["task_published"]      = True
-                        st.session_state.pop("chat_history", None)
-                        st.session_state.pop("current_q_idx", None)
-                        st.session_state.pop("is_completed", None)
-                        st.session_state.pop("evaluation_report", None)
-                        st.rerun()
-
-                    if st.session_state.get("task_published", False):
-                        st.success("🎉 **任務已成功發布！** 請通知員工切換到「員工實戰沙盒」頁籤開始練習。")
-                        with st.expander(f"📋 已發布的 {REQUIRED_SELECTION} 道考題（預覽）"):
-                            for idx, q in enumerate(st.session_state.get("published_questions", []), 1):
-                                st.markdown(f"**第 {idx} 題：**\n{q}")
-                                st.markdown("---")
-
+            if total_q == 0:
+                st.info("ℹ️ 無法自動解析考題格式，請重新執行 AI 萃取。")
             else:
-                # ── 隨機挑戰模式：唯讀預覽全部題目，系統自動抽題 ────
-                st.markdown("### 💬 題庫預覽（隨機挑戰模式）")
-                st.markdown(
-                    '<div class="selection-hint">'
-                    '🎲 &nbsp;以下是所有題目，員工每次練習系統將自動隨機抽取 2 題。'
-                    '</div>',
-                    unsafe_allow_html=True
+                # 即時向 Supabase 查詢目前所有「啟用中」文件的題目，依「類別 →
+                # 來源文件」兩層分組顯示，不再依賴瀏覽器記憶體裡的
+                # questions_by_category（那份資料在切換啟用狀態、刪除文件、
+                # 或多次上傳之間可能沒有即時同步，改成每次都直接問資料庫拿
+                # 當下真實狀態，畫面就不會再跟實際資料不一致）。
+                _company_id_for_preview = get_or_create_company(
+                    st.session_state.get("current_company", "")
                 )
+                _all_rows_for_preview = get_all_training_sets(_company_id_for_preview)
+                _active_rows_for_preview = [
+                    r for r in _all_rows_for_preview if r.get("is_active", True)
+                ]
+                _row_excluded_lookup = {
+                    r.get("id"): set(r.get("excluded_questions") or [])
+                    for r in _active_rows_for_preview
+                }
 
-                if total_q == 0:
-                    st.info("ℹ️ 無法自動解析考題格式，請重新執行 AI 萃取。")
+                cat_labels_short = {
+                    "cat_1_product":     "🔍 產品理解類",
+                    "cat_2_price":       "💰 價格異議類",
+                    "cat_3_trust":       "🛡️ 信任疑慮類",
+                    "cat_4_competition": "⚔️ 競品比較類",
+                    "cat_5_decision":    "🚪 決策障礙類",
+                    "cat_org_trust":     "🏢 組織與商業模式疑慮類",
+                    "cat_rules_info":    "📖 規則與資格說明類",
+                }
+
+                if not _active_rows_for_preview and not st.session_state.get("custom_questions"):
+                    # ── 舊版相容：查無分類資料時，顯示扁平列表 ────────────
+                    for i, q_text in enumerate(questions):
+                        st.markdown(f'<div class="question-card">', unsafe_allow_html=True)
+                        col_num, col_content = st.columns([0.07, 0.93])
+                        with col_num:
+                            st.markdown(f"**{i+1}**")
+                        with col_content:
+                            st.text_input(
+                                label=f"第 {i+1} 題",
+                                value=q_text,
+                                key=f"q_text_random_{i}",
+                            )
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.success(f"✅ 共 {total_q} 題已載入題庫，系統將每次隨機抽取 2 題。")
                 else:
-                    # 即時向 Supabase 查詢目前所有「啟用中」文件的題目，依「類別 →
-                    # 來源文件」兩層分組顯示，不再依賴瀏覽器記憶體裡的
-                    # questions_by_category（那份資料在切換啟用狀態、刪除文件、
-                    # 或多次上傳之間可能沒有即時同步，改成每次都直接問資料庫拿
-                    # 當下真實狀態，畫面就不會再跟實際資料不一致）。
-                    _company_id_for_preview = get_or_create_company(
-                        st.session_state.get("current_company", "")
-                    )
-                    _all_rows_for_preview = get_all_training_sets(_company_id_for_preview)
-                    _active_rows_for_preview = [
-                        r for r in _all_rows_for_preview if r.get("is_active", True)
-                    ]
-                    _row_excluded_lookup = {
-                        r.get("id"): set(r.get("excluded_questions") or [])
-                        for r in _active_rows_for_preview
-                    }
-
-                    cat_labels_short = {
-                        "cat_1_product":     "🔍 產品理解類",
-                        "cat_2_price":       "💰 價格異議類",
-                        "cat_3_trust":       "🛡️ 信任疑慮類",
-                        "cat_4_competition": "⚔️ 競品比較類",
-                        "cat_5_decision":    "🚪 決策障礙類",
-                        "cat_org_trust":     "🏢 組織與商業模式疑慮類",
-                        "cat_rules_info":    "📖 規則與資格說明類",
-                    }
-
-                    if not _active_rows_for_preview and not st.session_state.get("custom_questions"):
-                        # ── 舊版相容：查無分類資料時，顯示扁平列表 ────────────
-                        for i, q_text in enumerate(questions):
-                            st.markdown(f'<div class="question-card">', unsafe_allow_html=True)
-                            col_num, col_content = st.columns([0.07, 0.93])
-                            with col_num:
-                                st.markdown(f"**{i+1}**")
-                            with col_content:
-                                st.text_input(
-                                    label=f"第 {i+1} 題",
-                                    value=q_text,
-                                    key=f"q_text_random_{i}",
-                                )
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        st.success(f"✅ 共 {total_q} 題已載入題庫，系統將每次隨機抽取 2 題。")
-                    else:
-                        total_count = 0
-                        active_cat_count = 0
-                        for _cat_key in cat_labels_short:
-                            _cat_total = sum(
-                                len((r.get("questions_by_category") or {}).get(_cat_key, []))
-                                for r in _active_rows_for_preview
-                            )
-                            total_count += _cat_total
-                            if _cat_total > 0:
-                                active_cat_count += 1
-                        if st.session_state.get("custom_questions"):
-                            total_count += len(st.session_state["custom_questions"])
-                            active_cat_count += 1
-
-                        st.success(
-                            f"✅ 題庫共 {total_count} 題，分為 {active_cat_count} 大類別，"
-                            f"系統每次從不同類別各抽 1 題（共 2 題）。"
+                    total_count = 0
+                    active_cat_count = 0
+                    for _cat_key in cat_labels_short:
+                        _cat_total = sum(
+                            len((r.get("questions_by_category") or {}).get(_cat_key, []))
+                            for r in _active_rows_for_preview
                         )
+                        total_count += _cat_total
+                        if _cat_total > 0:
+                            active_cat_count += 1
+                    if st.session_state.get("custom_questions"):
+                        total_count += len(st.session_state["custom_questions"])
+                        active_cat_count += 1
 
-                        for cat_key, cat_label in cat_labels_short.items():
-                            _cat_file_groups = [
-                                (r.get("id"), r.get("filename", "未命名"),
-                                 (r.get("questions_by_category") or {}).get(cat_key, []))
-                                for r in _active_rows_for_preview
-                            ]
-                            _cat_file_groups = [(rid, fn, qs) for rid, fn, qs in _cat_file_groups if qs]
-                            if not _cat_file_groups:
-                                continue
-                            _cat_total_qs = sum(len(qs) for _, _, qs in _cat_file_groups)
-                            # 判斷這個分類「目前是否全部題目都納入」，作為批次打勾的初始狀態
-                            _cat_all_included = all(
-                                _qq not in _row_excluded_lookup.get(_rrid, set())
-                                for _rrid, _fn2, _qqs in _cat_file_groups
-                                for _qq in _qqs
+                    st.success(
+                        f"✅ 題庫共 {total_count} 題，分為 {active_cat_count} 大類別，"
+                        f"系統每次從不同類別各抽 1 題（共 2 題）。"
+                    )
+
+                    for cat_key, cat_label in cat_labels_short.items():
+                        _cat_file_groups = [
+                            (r.get("id"), r.get("filename", "未命名"),
+                             (r.get("questions_by_category") or {}).get(cat_key, []))
+                            for r in _active_rows_for_preview
+                        ]
+                        _cat_file_groups = [(rid, fn, qs) for rid, fn, qs in _cat_file_groups if qs]
+                        if not _cat_file_groups:
+                            continue
+                        _cat_total_qs = sum(len(qs) for _, _, qs in _cat_file_groups)
+                        # 判斷這個分類「目前是否全部題目都納入」，作為批次打勾的初始狀態
+                        _cat_all_included = all(
+                            _qq not in _row_excluded_lookup.get(_rrid, set())
+                            for _rrid, _fn2, _qqs in _cat_file_groups
+                            for _qq in _qqs
+                        )
+                        _cat_col_check, _cat_col_label = st.columns([0.06, 0.94])
+                        with _cat_col_check:
+                            _cat_new_included = st.checkbox(
+                                "分類批次", value=_cat_all_included,
+                                key=f"catbatch_{cat_key}_{int(_cat_all_included)}",
+                                label_visibility="collapsed"
                             )
-                            _cat_col_check, _cat_col_label = st.columns([0.06, 0.94])
-                            with _cat_col_check:
-                                _cat_new_included = st.checkbox(
-                                    "分類批次", value=_cat_all_included,
-                                    key=f"catbatch_{cat_key}_{int(_cat_all_included)}",
-                                    label_visibility="collapsed"
-                                )
-                            with _cat_col_label:
-                                st.markdown(f"**{cat_label}（{_cat_total_qs} 題）**")
-                            if _cat_new_included != _cat_all_included:
-                                for _rrid, _fn2, _qqs in _cat_file_groups:
-                                    for _qq in _qqs:
-                                        toggle_question_included(_rrid, _qq, _cat_new_included)
-                                st.rerun()
-                            with st.expander("查看／編輯題目", expanded=False):
-                                for _rid, _fn, _qs in _cat_file_groups:
-                                    st.markdown(f"**── 📄 來自：{_fn} ──**")
-                                    for _qi, _q in enumerate(_qs):
-                                        if "👉" in _q:
-                                            _q_disp, _q_hint = _q.split("👉", 1)
-                                            _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
-                                        else:
-                                            _q_disp, _q_hint = _q, ""
-
-                                        _edit_key = f"qedit_mode_{_rid}_{cat_key}_{_qi}"
-                                        _delc_key = f"qdel_confirm_{_rid}_{cat_key}_{_qi}"
-
-                                        if st.session_state.get(_edit_key, False):
-                                            # ── 編輯模式 ──
-                                            _new_q_disp = st.text_input(
-                                                "題目", value=_q_disp.strip(),
-                                                key=f"qedit_text_{_rid}_{cat_key}_{_qi}"
-                                            )
-                                            _new_q_hint = st.text_area(
-                                                "建議回答方向", value=_q_hint.strip(),
-                                                key=f"qedit_hint_{_rid}_{cat_key}_{_qi}", height=68
-                                            )
-                                            _col_save, _col_cancel = st.columns(2)
-                                            with _col_save:
-                                                if st.button("💾 儲存", key=f"qedit_save_{_rid}_{cat_key}_{_qi}",
-                                                             use_container_width=True):
-                                                    _combined = _new_q_disp.strip()
-                                                    if _new_q_hint.strip():
-                                                        _combined += f" 👉 建議回答方向：{_new_q_hint.strip()}"
-                                                    if update_training_set_question(_rid, cat_key, _qi, new_text=_combined):
-                                                        st.session_state[_edit_key] = False
-                                                        st.success("✅ 已更新")
-                                                        st.rerun()
-                                            with _col_cancel:
-                                                if st.button("✖️ 取消", key=f"qedit_cancel_{_rid}_{cat_key}_{_qi}",
-                                                             use_container_width=True):
-                                                    st.session_state[_edit_key] = False
-                                                    st.rerun()
-                                        elif st.session_state.get(_delc_key, False):
-                                            # ── 刪除確認模式 ──
-                                            st.warning(f"⚠️ 確定要刪除這一題嗎？「{_q_disp.strip()[:40]}」")
-                                            _col_confirm, _col_cancel2 = st.columns(2)
-                                            with _col_confirm:
-                                                if st.button("🗑️ 確認刪除", key=f"qdel_confirmbtn_{_rid}_{cat_key}_{_qi}",
-                                                             use_container_width=True):
-                                                    if update_training_set_question(_rid, cat_key, _qi, delete=True):
-                                                        st.session_state[_delc_key] = False
-                                                        st.success("✅ 已刪除")
-                                                        st.rerun()
-                                            with _col_cancel2:
-                                                if st.button("取消", key=f"qdel_cancelbtn_{_rid}_{cat_key}_{_qi}",
-                                                             use_container_width=True):
-                                                    st.session_state[_delc_key] = False
-                                                    st.rerun()
-                                        else:
-                                            # ── 一般顯示模式 ──
-                                            _col_check, _col_q, _col_edit, _col_del = st.columns([0.08, 0.74, 0.09, 0.09])
-                                            with _col_check:
-                                                _is_included = _q not in _row_excluded_lookup.get(_rid, set())
-                                                _new_included = st.checkbox(
-                                                    "納入", value=_is_included,
-                                                    key=f"qinc_{_rid}_{cat_key}_{_qi}_{int(_is_included)}",
-                                                    label_visibility="collapsed"
-                                                )
-                                                if _new_included != _is_included:
-                                                    toggle_question_included(_rid, _q, _new_included)
-                                                    st.rerun()
-                                            with _col_q:
-                                                st.markdown(f"- {_q_disp.strip()}")
-                                                if _q_hint.strip():
-                                                    st.caption(f"　👉{_q_hint.strip()}")
-                                            with _col_edit:
-                                                if st.button("✏️", key=f"qedit_btn_{_rid}_{cat_key}_{_qi}"):
-                                                    st.session_state.pop(f"qedit_text_{_rid}_{cat_key}_{_qi}", None)
-                                                    st.session_state.pop(f"qedit_hint_{_rid}_{cat_key}_{_qi}", None)
-                                                    st.session_state[_edit_key] = True
-                                                    st.rerun()
-                                            with _col_del:
-                                                if st.button("🗑️", key=f"qdel_btn_{_rid}_{cat_key}_{_qi}"):
-                                                    st.session_state[_delc_key] = True
-                                                    st.rerun()
-                                    st.markdown("")
-
-                        if st.session_state.get("custom_questions"):
-                            with st.expander(
-                                f"✏️ 主管自訂類（{len(st.session_state['custom_questions'])} 題）",
-                                expanded=False
-                            ):
-                                for _q in st.session_state["custom_questions"]:
+                        with _cat_col_label:
+                            st.markdown(f"**{cat_label}（{_cat_total_qs} 題）**")
+                        if _cat_new_included != _cat_all_included:
+                            for _rrid, _fn2, _qqs in _cat_file_groups:
+                                for _qq in _qqs:
+                                    toggle_question_included(_rrid, _qq, _cat_new_included)
+                            st.rerun()
+                        with st.expander("查看／編輯題目", expanded=False):
+                            for _rid, _fn, _qs in _cat_file_groups:
+                                st.markdown(f"**── 📄 來自：{_fn} ──**")
+                                for _qi, _q in enumerate(_qs):
                                     if "👉" in _q:
                                         _q_disp, _q_hint = _q.split("👉", 1)
                                         _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
                                     else:
                                         _q_disp, _q_hint = _q, ""
-                                    st.markdown(f"- {_q_disp.strip()}")
-                                    if _q_hint.strip():
-                                        st.caption(f"　👉{_q_hint.strip()}")
 
-                    # ── 主管自訂考題 ──────────────────────
-                    st.markdown("---")
-                    st.markdown("#### ✏️ 主管自訂考題")
-                    st.caption(
-                        "AI 沒有出到的問題，可以在這裡手動新增。「建議回答方向」欄位可留空，"
-                        "但填寫後這道題才會有教練提示與評分依據，品質才會跟 AI 出的題一致，"
-                        "強烈建議填寫。"
-                    )
+                                    _edit_key = f"qedit_mode_{_rid}_{cat_key}_{_qi}"
+                                    _delc_key = f"qdel_confirm_{_rid}_{cat_key}_{_qi}"
 
-                    new_q_r = st.text_input(
-                        label="題目（隨機模式）",
-                        placeholder="例如：你們的產品跟市面上的有什麼不同？",
-                        key="new_custom_q_input_random",
-                    )
-                    new_q_hint_r = st.text_area(
-                        label="建議回答方向（選填，但強烈建議填寫）",
-                        placeholder="例如：說明產品的獨家成分與認證，並舉出跟競品的具體差異",
-                        key="new_custom_q_hint_input_random",
-                        height=80,
-                    )
-                    if st.button("➕ 新增", key="add_custom_random"):
-                        if new_q_r.strip():
-                            _combined_q_r = new_q_r.strip()
-                            if new_q_hint_r.strip():
-                                _combined_q_r += f" 👉 建議回答方向：{new_q_hint_r.strip()}"
-                            st.session_state["custom_questions"].append(_combined_q_r)
-                            st.rerun()
+                                    if st.session_state.get(_edit_key, False):
+                                        # ── 編輯模式 ──
+                                        _new_q_disp = st.text_input(
+                                            "題目", value=_q_disp.strip(),
+                                            key=f"qedit_text_{_rid}_{cat_key}_{_qi}"
+                                        )
+                                        _new_q_hint = st.text_area(
+                                            "建議回答方向", value=_q_hint.strip(),
+                                            key=f"qedit_hint_{_rid}_{cat_key}_{_qi}", height=68
+                                        )
+                                        _col_save, _col_cancel = st.columns(2)
+                                        with _col_save:
+                                            if st.button("💾 儲存", key=f"qedit_save_{_rid}_{cat_key}_{_qi}",
+                                                         use_container_width=True):
+                                                _combined = _new_q_disp.strip()
+                                                if _new_q_hint.strip():
+                                                    _combined += f" 👉 建議回答方向：{_new_q_hint.strip()}"
+                                                if update_training_set_question(_rid, cat_key, _qi, new_text=_combined):
+                                                    st.session_state[_edit_key] = False
+                                                    st.success("✅ 已更新")
+                                                    st.rerun()
+                                        with _col_cancel:
+                                            if st.button("✖️ 取消", key=f"qedit_cancel_{_rid}_{cat_key}_{_qi}",
+                                                         use_container_width=True):
+                                                st.session_state[_edit_key] = False
+                                                st.rerun()
+                                    elif st.session_state.get(_delc_key, False):
+                                        # ── 刪除確認模式 ──
+                                        st.warning(f"⚠️ 確定要刪除這一題嗎？「{_q_disp.strip()[:40]}」")
+                                        _col_confirm, _col_cancel2 = st.columns(2)
+                                        with _col_confirm:
+                                            if st.button("🗑️ 確認刪除", key=f"qdel_confirmbtn_{_rid}_{cat_key}_{_qi}",
+                                                         use_container_width=True):
+                                                if update_training_set_question(_rid, cat_key, _qi, delete=True):
+                                                    st.session_state[_delc_key] = False
+                                                    st.success("✅ 已刪除")
+                                                    st.rerun()
+                                        with _col_cancel2:
+                                            if st.button("取消", key=f"qdel_cancelbtn_{_rid}_{cat_key}_{_qi}",
+                                                         use_container_width=True):
+                                                st.session_state[_delc_key] = False
+                                                st.rerun()
+                                    else:
+                                        # ── 一般顯示模式 ──
+                                        _col_check, _col_q, _col_edit, _col_del = st.columns([0.08, 0.74, 0.09, 0.09])
+                                        with _col_check:
+                                            _is_included = _q not in _row_excluded_lookup.get(_rid, set())
+                                            _new_included = st.checkbox(
+                                                "納入", value=_is_included,
+                                                key=f"qinc_{_rid}_{cat_key}_{_qi}_{int(_is_included)}",
+                                                label_visibility="collapsed"
+                                            )
+                                            if _new_included != _is_included:
+                                                toggle_question_included(_rid, _q, _new_included)
+                                                st.rerun()
+                                        with _col_q:
+                                            st.markdown(f"- {_q_disp.strip()}")
+                                            if _q_hint.strip():
+                                                st.caption(f"　👉{_q_hint.strip()}")
+                                        with _col_edit:
+                                            if st.button("✏️", key=f"qedit_btn_{_rid}_{cat_key}_{_qi}"):
+                                                st.session_state.pop(f"qedit_text_{_rid}_{cat_key}_{_qi}", None)
+                                                st.session_state.pop(f"qedit_hint_{_rid}_{cat_key}_{_qi}", None)
+                                                st.session_state[_edit_key] = True
+                                                st.rerun()
+                                        with _col_del:
+                                            if st.button("🗑️", key=f"qdel_btn_{_rid}_{cat_key}_{_qi}"):
+                                                st.session_state[_delc_key] = True
+                                                st.rerun()
+                                st.markdown("")
 
                     if st.session_state.get("custom_questions"):
-                        for ci, cq in enumerate(st.session_state["custom_questions"]):
-                            col_cq_r, col_del_r = st.columns([0.88, 0.12])
-                            with col_cq_r:
-                                st.info(f"✏️ {cq}")
-                            with col_del_r:
-                                if st.button("🗑️", key=f"del_custom_r_{ci}"):
-                                    st.session_state["custom_questions"].pop(ci)
-                                    st.rerun()
+                        with st.expander(
+                            f"✏️ 主管自訂類（{len(st.session_state['custom_questions'])} 題）",
+                            expanded=False
+                        ):
+                            for _q in st.session_state["custom_questions"]:
+                                if "👉" in _q:
+                                    _q_disp, _q_hint = _q.split("👉", 1)
+                                    _q_hint = re.sub(r'^\s*建議回答方向[：:]\s*', '', _q_hint.strip())
+                                else:
+                                    _q_disp, _q_hint = _q, ""
+                                st.markdown(f"- {_q_disp.strip()}")
+                                if _q_hint.strip():
+                                    st.caption(f"　👉{_q_hint.strip()}")
 
-                    publish_random_btn = st.button(
-                        "🚀 儲存並啟用隨機挑戰模式",
-                        type="primary",
-                        use_container_width=True
-                    )
+                # ── 主管自訂考題 ──────────────────────
+                st.markdown("---")
+                st.markdown("#### ✏️ 主管自訂考題")
+                st.caption(
+                    "AI 沒有出到的問題，可以在這裡手動新增。「建議回答方向」欄位可留空，"
+                    "但填寫後這道題才會有教練提示與評分依據，品質才會跟 AI 出的題一致，"
+                    "強烈建議填寫。"
+                )
 
-                    if publish_random_btn:
-                        # 儲存編輯後的所有題目；published_questions 留空，由員工端隨機抽取
-                        all_questions = [
-                            st.session_state.get(f"q_text_random_{i}", q)
-                            for i, q in enumerate(st.session_state.get("questions", []))
-                        ]
-                        # 合併主管自訂問題進 cat_6_custom，確保能被隨機抽中
-                        _qbc_to_save = dict(st.session_state.get("questions_by_category", {}))
-                        if st.session_state.get("custom_questions"):
-                            _qbc_to_save["cat_6_custom"] = st.session_state["custom_questions"]
-                        st.session_state["questions_by_category"] = _qbc_to_save
-
-                        st.session_state["questions"]           = all_questions
-                        st.session_state["published_questions"] = []  # 員工端動態抽取
-                        st.session_state["task_published"]      = True
-                        st.session_state.pop("chat_history", None)
-                        st.session_state.pop("current_q_idx", None)
-                        st.session_state.pop("is_completed", None)
-                        st.session_state.pop("evaluation_report", None)
-                        save_settings()
+                new_q_r = st.text_input(
+                    label="題目（隨機模式）",
+                    placeholder="例如：你們的產品跟市面上的有什麼不同？",
+                    key="new_custom_q_input_random",
+                )
+                new_q_hint_r = st.text_area(
+                    label="建議回答方向（選填，但強烈建議填寫）",
+                    placeholder="例如：說明產品的獨家成分與認證，並舉出跟競品的具體差異",
+                    key="new_custom_q_hint_input_random",
+                    height=80,
+                )
+                if st.button("➕ 新增", key="add_custom_random"):
+                    if new_q_r.strip():
+                        _combined_q_r = new_q_r.strip()
+                        if new_q_hint_r.strip():
+                            _combined_q_r += f" 👉 建議回答方向：{new_q_hint_r.strip()}"
+                        st.session_state["custom_questions"].append(_combined_q_r)
                         st.rerun()
 
-                    if st.session_state.get("task_published", False):
-                        st.success("🎉 **隨機挑戰模式已啟用！** 員工每次練習將自動隨機抽取 2 題。")
+                if st.session_state.get("custom_questions"):
+                    for ci, cq in enumerate(st.session_state["custom_questions"]):
+                        col_cq_r, col_del_r = st.columns([0.88, 0.12])
+                        with col_cq_r:
+                            st.info(f"✏️ {cq}")
+                        with col_del_r:
+                            if st.button("🗑️", key=f"del_custom_r_{ci}"):
+                                st.session_state["custom_questions"].pop(ci)
+                                st.rerun()
+
+                publish_random_btn = st.button(
+                    "🚀 儲存並啟用隨機挑戰模式",
+                    type="primary",
+                    use_container_width=True
+                )
+
+                if publish_random_btn:
+                    # 儲存編輯後的所有題目；published_questions 留空，由員工端隨機抽取
+                    all_questions = [
+                        st.session_state.get(f"q_text_random_{i}", q)
+                        for i, q in enumerate(st.session_state.get("questions", []))
+                    ]
+                    # 合併主管自訂問題進 cat_6_custom，確保能被隨機抽中
+                    _qbc_to_save = dict(st.session_state.get("questions_by_category", {}))
+                    if st.session_state.get("custom_questions"):
+                        _qbc_to_save["cat_6_custom"] = st.session_state["custom_questions"]
+                    st.session_state["questions_by_category"] = _qbc_to_save
+
+                    st.session_state["questions"]           = all_questions
+                    st.session_state["published_questions"] = []  # 員工端動態抽取
+                    st.session_state["task_published"]      = True
+                    st.session_state.pop("chat_history", None)
+                    st.session_state.pop("current_q_idx", None)
+                    st.session_state.pop("is_completed", None)
+                    st.session_state.pop("evaluation_report", None)
+                    save_settings()
+                    st.rerun()
+
+                if st.session_state.get("task_published", False):
+                    st.success("🎉 **隨機挑戰模式已啟用！** 員工每次練習將自動隨機抽取 2 題。")
 
         elif not start_button:
             st.markdown("""
@@ -1080,55 +908,37 @@ if tab2 is not None:
 
     # ── 任務已發布：解鎖沙盒 ──────────────────
     else:
-        current_mode = st.session_state.get("question_mode", "🎯 主管精選模式")
+        # 隨機挑戰模式：強制順序覆蓋法
+        # 階段A（覆蓋模式）：只要還有任何啟用中的分類存在「沒練過的題目」，
+        # 就按固定順序（config.CATEGORY_LABELS的順序）輪替分類，優先把每個
+        # 分類的題目都摸過一輪，確保新人不會漏練任何一種疑慮。
+        # 階段B（分數優先模式）：所有分類都覆蓋完畢後，改成排除「上一次剛
+        # 練過的分類」，剩下的分類用「平均分數越低、被選中機率越高」的
+        # 加權隨機去選，弱點會更常被抽到，但不會每次都卡在同一類。
+        # 兩個階段選定分類後，分類底下的題目一律用「沒看過優先、其次練習
+        # 次數最少優先、都差不多才隨機」去挑，最多抽2題，分類本身只有1題
+        # 就只出1題，不勉強湊數。
+        if not st.session_state.get("chat_history"):
+            questions_by_category = st.session_state.get("questions_by_category", {})
+            _company_id_now = st.session_state.get("company_id", "")
+            _employee_now = st.session_state.get("employee_name", "匿名員工")
 
-        if current_mode == "🎲 隨機挑戰模式":
-            # 隨機挑戰模式：強制順序覆蓋法
-            # 階段A（覆蓋模式）：只要還有任何啟用中的分類存在「沒練過的題目」，
-            # 就按固定順序（config.CATEGORY_LABELS的順序）輪替分類，優先把每個
-            # 分類的題目都摸過一輪，確保新人不會漏練任何一種疑慮。
-            # 階段B（分數優先模式）：所有分類都覆蓋完畢後，改成排除「上一次剛
-            # 練過的分類」，剩下的分類用「平均分數越低、被選中機率越高」的
-            # 加權隨機去選，弱點會更常被抽到，但不會每次都卡在同一類。
-            # 兩個階段選定分類後，分類底下的題目一律用「沒看過優先、其次練習
-            # 次數最少優先、都差不多才隨機」去挑，最多抽2題，分類本身只有1題
-            # 就只出1題，不勉強湊數。
-            if not st.session_state.get("chat_history"):
-                questions_by_category = st.session_state.get("questions_by_category", {})
-                _company_id_now = st.session_state.get("company_id", "")
-                _employee_now = st.session_state.get("employee_name", "匿名員工")
-
-                randomly_selected, selected_cat = select_next_questions(
-                    _company_id_now, _employee_now, questions_by_category
-                )
-                if not randomly_selected:
-                    # 完全沒有分類資料：從扁平列表隨機抽 2 題（舊版相容）
-                    all_q = st.session_state.get("questions", [])
-                    randomly_selected = random.sample(all_q, min(2, len(all_q)))
-                    selected_cat = ""
-
-                st.session_state["current_random_category"] = selected_cat
-                st.session_state["current_random_questions"] = randomly_selected
-
-            published_questions = st.session_state.get(
-                "current_random_questions",
-                st.session_state.get("questions", [])[:2]
+            randomly_selected, selected_cat = select_next_questions(
+                _company_id_now, _employee_now, questions_by_category
             )
-        else:
-            published_questions = st.session_state.get("published_questions", [])
-            # 若 published_questions 是空的，從完整題庫隨機抽 2 題當備援
-            if not published_questions:
+            if not randomly_selected:
+                # 完全沒有分類資料：從扁平列表隨機抽 2 題（舊版相容）
                 all_q = st.session_state.get("questions", [])
-                if all_q:
-                    published_questions = random.sample(all_q, min(2, len(all_q)))
-                else:
-                    # 題庫也是空的，從 questions_by_category 裡抽
-                    qbc = st.session_state.get("questions_by_category", {})
-                    all_from_cat = [q for qs in qbc.values() for q in qs]
-                    if all_from_cat:
-                        published_questions = random.sample(
-                            all_from_cat, min(2, len(all_from_cat))
-                        )
+                randomly_selected = random.sample(all_q, min(2, len(all_q)))
+                selected_cat = ""
+
+            st.session_state["current_random_category"] = selected_cat
+            st.session_state["current_random_questions"] = randomly_selected
+
+        published_questions = st.session_state.get(
+            "current_random_questions",
+            st.session_state.get("questions", [])[:2]
+        )
 
         main_analysis       = st.session_state.get("main_analysis", "")
         total_q             = len(published_questions)
@@ -1399,14 +1209,10 @@ if tab2 is not None:
                                             "strength":       auto_report.get("strength", ""),
                                             "improvement_tips": json.dumps(auto_report.get("improvement_tips", []), ensure_ascii=False),
                                             "practiced_questions": json.dumps(
-                                                (
-                                                    [
-                                                        {"category": st.session_state.get("current_random_category", ""), "question": q}
-                                                        for q in published_questions
-                                                    ]
-                                                    if st.session_state.get("question_mode", "🎯 主管精選模式") == "🎲 隨機挑戰模式"
-                                                    else []
-                                                ),
+                                                [
+                                                    {"category": st.session_state.get("current_random_category", ""), "question": q}
+                                                    for q in published_questions
+                                                ],
                                                 ensure_ascii=False
                                             ),
                                         }
@@ -1978,8 +1784,8 @@ with tab3:
                             emp_cat_stats[_name][_cat]["count"] += 1
 
                     if not emp_cat_stats:
-                        st.info("ℹ️ 目前的訓練記錄還沒有分類資訊（分類統計僅適用於「隨機挑戰模式」"
-                                "累積的新資料，主管精選模式或更早期的舊資料不會有分類標記）。")
+                        st.info("ℹ️ 目前的訓練記錄還沒有分類資訊（分類統計僅適用於此功能上線後"
+                                "累積的新資料，更早期的舊資料不會有分類標記）。")
                     else:
                         _cat_keys = list(CATEGORY_LABELS.keys())
                         _cat_short_labels = {
