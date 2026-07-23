@@ -409,10 +409,6 @@ if tab1 is not None:
         if st.session_state.get("task_published", False):
             st.success(f"✅ 任務已發布　｜　{REQUIRED_SELECTION} 題已設定")
             st.caption(f"來源教材：{st.session_state.get('analyzed_filename', '—')}")
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 儲存企業專屬設定", use_container_width=True):
-                save_settings()
-                st.success("✅ 設定已寫入 company_settings.json，重整頁面後自動還原！")
         else:
             st.warning("⏳ 尚未發布任務")
 
@@ -531,13 +527,10 @@ if tab1 is not None:
         # 顯示分析結果
         if "main_analysis" in st.session_state and "questions" in st.session_state:
 
+            # 三大分析重點（main_analysis）仍會照常生成，並繼續作為AI客戶
+            # 角色扮演的背景資料使用，只是不在這裡顯示給主管看，讓主管能
+            # 更快看到題目本身。
             st.caption(f"📄 分析來源：{st.session_state.get('analyzed_filename', '上傳的文件')}")
-
-            # 三大重點展示
-            st.markdown("### 📊 三大分析重點")
-            with st.container(border=True):
-                st.markdown(st.session_state["main_analysis"])
-
             st.markdown("---")
 
             # 互動考題編輯區（依出題模式分流）
